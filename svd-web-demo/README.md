@@ -1,34 +1,46 @@
 # Sparse SVD Movie Recommender Web Demo
 
-This folder contains a self-contained static website for the Matrices Project demo.
+This folder contains the static explanation website for the Matrices Project demo.
+It runs entirely in the browser and can be published directly with GitHub Pages.
+
+The Python CLI/reference version lives in `../demo.py`.
 
 ## Run
 
 From this folder:
 
 ```bash
-python3 server.py
+python3 -m http.server 8765
 ```
 
 Then open:
 
 ```text
-http://localhost:5173
+http://localhost:8765
 ```
 
-If that Python environment does not have the matrix libraries installed:
+You can also open `index.html` directly in a browser. The local server is useful
+because it matches how GitHub Pages serves the files.
+
+## Deploy
+
+The repository includes `.github/workflows/pages.yml`, which publishes this
+folder to GitHub Pages when changes are pushed to `main`. In the GitHub
+repository settings, set Pages to use GitHub Actions as the publishing source.
+
+To run the Python CLI version from the repository root:
 
 ```bash
 python3 -m pip install -r requirements.txt
+python3 demo.py
 ```
 
 ## Structure
 
 - `index.html`: page structure
 - `styles.css`: minimal visual design and animations
-- `app.js`: step-by-step renderer, with a browser-side fallback calculation
-- `calculator.py`: Python calculation backend
-- `server.py`: local web server with `/api/model`
+- `app.js`: step-by-step renderer, browser-side calculation, and editable
+  "You" rating controls
 
 The calculation follows the Python demo idea over a 10 user x 16 movie matrix:
 
