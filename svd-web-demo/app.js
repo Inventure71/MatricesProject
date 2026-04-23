@@ -460,16 +460,16 @@ function baselineCalculationHTML() {
         </div>
         <div class="formula-stack">
           <div class="formula-line">
-            <span>1. Average the known ratings for ${movies[column]}</span>
+            <span>1. Use this movie's known ratings to find its normal score</span>
             <strong>(${terms}) / ${knownColumnRatings.length} = ${format(average, 2)}</strong>
           </div>
           <div class="formula-line">
-            <span>2. Subtract the average from the chosen rating</span>
+            <span>2. Convert the raw rating into distance from normal</span>
             <strong>${rating} - ${format(average, 2)} = ${format(residual, 2)}</strong>
           </div>
           <div class="formula-line emphasis">
-            <span>3. Store only this deviation</span>
-            <strong>${users[row]} liked ${movies[column]} ${format(Math.abs(residual), 2)} above the movie average</strong>
+            <span>3. SVD receives the deviation, not the raw rating</span>
+            <strong>${users[row]} is ${format(Math.abs(residual), 2)} ${residual >= 0 ? "above" : "below"} the ${movies[column]} baseline</strong>
           </div>
         </div>
       </div>
@@ -500,8 +500,8 @@ function svdCalculationHTML() {
         </div>
 
         <div class="dot-intro">
-          <strong>SVD has already given both sides hidden coordinates.</strong>
-          <span>Now compare matching coordinates only: Factor 1 with Factor 1, Factor 2 with Factor 2.</span>
+          <strong>Factor 1 and Factor 2 are hidden taste axes learned by SVD.</strong>
+          <span>We did not name them as genres. They are compressed patterns from the ratings, and every user and movie gets a coordinate on each axis.</span>
         </div>
 
         <div class="factor-compare-grid">
@@ -512,7 +512,7 @@ function svdCalculationHTML() {
           ${userVector
             .map(
               (userValue, index) => `
-                <div class="factor-label-cell">Factor ${index + 1}</div>
+                <div class="factor-label-cell">Hidden factor ${index + 1}</div>
                 <div class="factor-value">${format(userValue, 2)}</div>
                 <div class="factor-value">${format(movieVector[index], 2)}</div>
                 <div class="factor-value factor-product">
@@ -527,7 +527,7 @@ function svdCalculationHTML() {
         <div class="dot-formula-strip">
           <div>
             <span>1. Multiply matching factors</span>
-            <strong>F1 with F1, F2 with F2</strong>
+            <strong>Factor 1 with Factor 1, Factor 2 with Factor 2</strong>
           </div>
           <div>
             <span>2. Add product results</span>
@@ -541,7 +541,11 @@ function svdCalculationHTML() {
       </div>
       <div class="mini-rank dot-summary">
         <strong>Plain meaning</strong>
-        <p>The coordinates are not ratings. They are hidden taste-pattern scores learned by SVD.</p>
+        <p>Think of each factor as one question SVD invented to explain rating patterns. The demo keeps two factors so the calculation fits on screen.</p>
+        <div>
+          <span>Not a genre label</span>
+          <b>Factor 1 does not literally mean sci-fi, and Factor 2 does not literally mean romance.</b>
+        </div>
         <div>
           <span>Same sign</span>
           <b>Positive product, rating moves up</b>
@@ -617,7 +621,7 @@ const steps = [
       }),
   },
   {
-    title: "Crop the view for teaching",
+    title: "We crop the view for visualization purposes",
     text: "The calculation still uses the full matrix, but the visualization now focuses on a smaller slice so each step is readable.",
     inspectorTitle: "Display-only crop",
     inspectorText: "This crop includes sci-fi fans, romance fans, and the target user. It does not change the backend result.",
@@ -639,14 +643,14 @@ const steps = [
   },
   {
     title: "Compute one movie-average baseline",
-    text: "Before SVD, raw ratings are converted into deviations from each movie's average, so popular movies do not dominate just because their ratings are usually high.",
-    inspectorTitle: "Residual idea",
-    inspectorText: "Blanks are still unknown at this stage. A real zero residual can happen only when a known rating exactly equals its movie average.",
+    text: "Before SVD, each movie gets a simple baseline: its average known rating. Then every real rating is replaced by rating minus movie average, so SVD learns what is unusually high or low instead of relearning that some movies are generally rated higher.",
+    inspectorTitle: "Baseline idea",
+    inspectorText: "The movie average is the starting prediction. SVD works on deviations from that start. Blanks stay unknown here; they are not treated as low ratings.",
     render: baselineCalculationHTML,
   },
   {
     title: "Build the SVD input matrix",
-    text: "Known ratings become residual numbers. Missing ratings become implicit zero residuals, shown as 0*, meaning no known deviation from the movie average.",
+    text: "Known ratings become residual numbers rappresenting how much the user liked or disliked the movie compared to the movie average. Missing ratings become implicit zero residuals, shown as 0*, meaning no known deviation from the movie average.",
     inspectorTitle: "SVD input",
     inspectorText: "0* is not a rating. It is how the sparse matrix behaves mathematically for unstored entries during TruncatedSVD.",
     render: () =>
@@ -664,16 +668,16 @@ const steps = [
   },
   {
     title: "SVD creates hidden coordinates",
-    text: "SVD takes the residual matrix and gives every user and movie a short coordinate list. Similar coordinates usually mean compatible taste.",
+    text: "SVD takes the residual matrix and gives every user and movie a short coordinate list. Each coordinate is a hidden factor: an unnamed pattern learned from the ratings.",
     inspectorTitle: "Hidden factors",
-    inspectorText: "The two kept factors are learned from the data. We do not label them manually as genres; SVD discovers the strongest patterns.",
+    inspectorText: "Factor 1 and Factor 2 are not labels we chose. They are the two strongest hidden directions SVD kept from the data.",
     render: svdHTML,
   },
   {
     title: "Compare coordinates with a dot product",
-    text: "For one blank cell, SVD compares the user's hidden coordinates with the movie's hidden coordinates. The comparison becomes an adjustment to the movie average.",
+    text: "For one blank cell, SVD compares the user's coordinates and the movie's coordinates on the same hidden factors. The result becomes an adjustment to the movie average.",
     inspectorTitle: "Dot product",
-    inspectorText: "Read it as matching along the same hidden factors. Matching signs increase the prediction; opposite signs decrease it.",
+    inspectorText: "A factor is an unnamed rating pattern learned from the data. Matching signs increase the prediction; opposite signs decrease it.",
     render: svdCalculationHTML,
   },
   {
