@@ -54,10 +54,15 @@ function targetLastUserIndices() {
 }
 
 const els = {
+  workspace: document.querySelector(".workspace"),
   visualPlane: document.querySelector("#visualPlane"),
+  inspector: document.querySelector("#inspector"),
   stepCount: document.querySelector("#stepCount"),
   stepTitle: document.querySelector("#stepTitle"),
   stepText: document.querySelector("#stepText"),
+  stageNote: document.querySelector("#stageNote"),
+  stageNoteTitle: document.querySelector("#stageNoteTitle"),
+  stageNoteText: document.querySelector("#stageNoteText"),
   inspectorTitle: document.querySelector("#inspectorTitle"),
   inspectorText: document.querySelector("#inspectorText"),
   stepRail: document.querySelector("#stepRail"),
@@ -70,6 +75,8 @@ const els = {
   playLabel: document.querySelector("#playLabel"),
   tabs: [],
 };
+
+const sparseStepIndex = 2;
 
 function mean(values) {
   const known = values.filter((value) => value !== null && Number.isFinite(value));
@@ -1077,10 +1084,16 @@ function renderStepTabs() {
 function renderStep(index) {
   currentStep = (index + steps.length) % steps.length;
   const step = steps[currentStep];
+  const showsSparseInspector = currentStep === sparseStepIndex;
 
   els.stepCount.textContent = `Step ${currentStep + 1} of ${steps.length}`;
   els.stepTitle.textContent = step.title;
   els.stepText.textContent = step.text;
+  els.workspace.classList.toggle("has-side-inspector", showsSparseInspector);
+  els.inspector.hidden = !showsSparseInspector;
+  els.stageNote.hidden = showsSparseInspector;
+  els.stageNoteTitle.textContent = step.inspectorTitle;
+  els.stageNoteText.textContent = step.inspectorText;
   els.inspectorTitle.textContent = step.inspectorTitle;
   els.inspectorText.textContent = step.inspectorText;
   els.visualPlane.innerHTML = step.render();
