@@ -251,6 +251,11 @@ function format(value, digits = 2) {
   return Number.isFinite(value) ? value.toFixed(digits) : "";
 }
 
+function signedFormat(value, digits = 2) {
+  if (!Number.isFinite(value)) return "";
+  return `${value >= 0 ? "+" : "-"}${Math.abs(value).toFixed(digits)}`;
+}
+
 function heatColor(value, min, max, positive = true) {
   const range = max - min || 1;
   const normalized = Math.max(0, Math.min(1, (value - min) / range));
@@ -487,36 +492,68 @@ function svdCalculationHTML() {
   const predicted = Math.min(5, Math.max(1, baseline + predictedResidual));
 
   return `
-    <div class="calculation-scene">
-      <div class="calc-panel">
+    <div class="calculation-scene dot-product-scene">
+      <div class="calc-panel dot-product-panel">
         <div class="matrix-title">
-          <strong>Follow one missing prediction</strong>
-          <span>${users[row]} has not rated ${movies[column]}</span>
+          <strong>One blank cell</strong>
+          <span>Predict ${movies[column]} for ${users[row]}</span>
         </div>
-        <div class="factor-table">
-          <div></div><strong>Factor 1</strong><strong>Factor 2</strong>
-          <span>${users[row]} coordinates</span>${userVector.map((value) => `<b>${format(value, 2)}</b>`).join("")}
-          <span>${movies[column]} coordinates</span>${movieVector.map((value) => `<b>${format(value, 2)}</b>`).join("")}
-          <span>Multiply matching factors</span>${contributions.map((value) => `<b>${format(value, 2)}</b>`).join("")}
+
+        <div class="dot-intro">
+          <strong>SVD has already given both sides hidden coordinates.</strong>
+          <span>Now compare matching coordinates only: Factor 1 with Factor 1, Factor 2 with Factor 2.</span>
         </div>
-        <div class="formula-stack">
-          <div class="formula-line">
-            <span>1. Add the factor products</span>
-            <strong>${contributions.map((value) => format(value, 2)).join(" + ")} = ${format(predictedResidual, 2)}</strong>
+
+        <div class="factor-compare-grid">
+          <div class="factor-heading"></div>
+          <div class="factor-heading">${users[row]}</div>
+          <div class="factor-heading">${movies[column]}</div>
+          <div class="factor-heading">Product</div>
+          ${userVector
+            .map(
+              (userValue, index) => `
+                <div class="factor-label-cell">Factor ${index + 1}</div>
+                <div class="factor-value">${format(userValue, 2)}</div>
+                <div class="factor-value">${format(movieVector[index], 2)}</div>
+                <div class="factor-value factor-product">
+                  <span>${format(userValue, 2)} x ${format(movieVector[index], 2)}</span>
+                  <b>${signedFormat(contributions[index], 2)}</b>
+                </div>
+              `
+            )
+            .join("")}
+        </div>
+
+        <div class="dot-formula-strip">
+          <div>
+            <span>1. Multiply matching factors</span>
+            <strong>F1 with F1, F2 with F2</strong>
           </div>
-          <div class="formula-line">
-            <span>2. Add back the movie average</span>
-            <strong>${format(baseline, 2)} + ${format(predictedResidual, 2)} = ${format(predicted, 2)}</strong>
+          <div>
+            <span>2. Add product results</span>
+            <strong>${contributions.map((value) => signedFormat(value, 2)).join(" ")} = ${signedFormat(predictedResidual, 2)}</strong>
           </div>
-          <div class="formula-line emphasis">
-            <span>3. This becomes the predicted rating</span>
-            <strong>${movies[column]} for ${users[row]} -> ${format(predicted, 2)}</strong>
+          <div class="is-final">
+            <span>3. Add movie average back</span>
+            <strong>${format(baseline, 2)} ${signedFormat(predictedResidual, 2)} = ${format(predicted, 2)}</strong>
           </div>
         </div>
       </div>
-      <div class="mini-rank">
-        <strong>Read this as a similarity check</strong>
-        <p>If the user's hidden coordinates point in the same direction as the movie's coordinates, the products are positive and the predicted rating moves upward.</p>
+      <div class="mini-rank dot-summary">
+        <strong>Plain meaning</strong>
+        <p>The coordinates are not ratings. They are hidden taste-pattern scores learned by SVD.</p>
+        <div>
+          <span>Same sign</span>
+          <b>Positive product, rating moves up</b>
+        </div>
+        <div>
+          <span>Opposite sign</span>
+          <b>Negative product, rating moves down</b>
+        </div>
+        <div>
+          <span>Final role</span>
+          <b>The dot product is only the SVD adjustment. The final rating is average plus adjustment.</b>
+        </div>
       </div>
     </div>
   `;
@@ -633,10 +670,10 @@ const steps = [
     render: svdHTML,
   },
   {
-    title: "Predict by matching coordinates",
-    text: "To fill one blank cell, multiply the user's coordinates by the movie's coordinates, add those products, then add the movie average back.",
+    title: "Compare coordinates with a dot product",
+    text: "For one blank cell, SVD compares the user's hidden coordinates with the movie's hidden coordinates. The comparison becomes an adjustment to the movie average.",
     inspectorTitle: "Dot product",
-    inspectorText: "The dot product is just factor-by-factor multiplication followed by addition. It estimates how much to move above or below the movie average.",
+    inspectorText: "Read it as matching along the same hidden factors. Matching signs increase the prediction; opposite signs decrease it.",
     render: svdCalculationHTML,
   },
   {
