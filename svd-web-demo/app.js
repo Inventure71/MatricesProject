@@ -55,6 +55,7 @@ const els = {
   stepText: document.querySelector("#stepText"),
   inspectorTitle: document.querySelector("#inspectorTitle"),
   inspectorText: document.querySelector("#inspectorText"),
+  stepRail: document.querySelector("#stepRail"),
   totalCells: document.querySelector("#totalCells"),
   knownRatings: document.querySelector("#knownRatings"),
   sparsity: document.querySelector("#sparsity"),
@@ -62,7 +63,7 @@ const els = {
   nextStep: document.querySelector("#nextStep"),
   playPause: document.querySelector("#playPause"),
   playLabel: document.querySelector("#playLabel"),
-  tabs: [...document.querySelectorAll(".step-tab")],
+  tabs: [],
 };
 
 function mean(values) {
@@ -349,6 +350,133 @@ function matrixHTML({
   `;
 }
 
+function infoPreviewHTML({ label, title, body }) {
+  return `
+    <span class="info-preview">
+      <button class="info-button" type="button" aria-label="${label}">i</button>
+      <span class="preview-popover" role="tooltip">
+        <span class="preview-title">${title}</span>
+        ${body}
+      </span>
+    </span>
+  `;
+}
+
+function residualMatrixPreviewHTML() {
+  const rowIndices = focusUserIndices.slice(0, 4);
+  const movieIndices = focusMovieIndices.slice(0, 5);
+  const columns = `86px repeat(${movieIndices.length}, minmax(48px, 1fr))`;
+  const header = [
+    `<span class="mini-matrix-cell is-empty"></span>`,
+    ...movieIndices.map((columnIndex) => `<span class="mini-matrix-cell is-header">${movies[columnIndex]}</span>`),
+  ].join("");
+  const body = rowIndices
+    .map((rowIndex) => {
+      const cells = movieIndices
+        .map((columnIndex) => {
+          const value = ratings[rowIndex][columnIndex] === null ? null : model.residualMatrix[rowIndex][columnIndex];
+          return `<span class="mini-matrix-cell ${value === null ? "is-implicit" : ""}">${value === null ? "0*" : format(value, 2)}</span>`;
+        })
+        .join("");
+      return `<span class="mini-matrix-cell is-header">${users[rowIndex]}</span>${cells}`;
+    })
+    .join("");
+
+  return `
+    <span class="mini-matrix-preview" style="grid-template-columns:${columns}">
+      ${header}
+      ${body}
+    </span>
+  `;
+}
+
+function residualVectorPreviewHTML({ axis, index }) {
+  const entries =
+    axis === "row"
+      ? focusMovieIndices.map((movieIndex) => ({
+          label: movies[movieIndex],
+          value: ratings[index][movieIndex] === null ? null : model.residualMatrix[index][movieIndex],
+        }))
+      : focusUserIndices.map((userIndex) => ({
+          label: users[userIndex],
+          value: ratings[userIndex][index] === null ? null : model.residualMatrix[userIndex][index],
+        }));
+
+  return `
+    <span class="vector-preview">
+      ${entries
+        .map(
+          (entry) => `
+            <span>${entry.label}</span>
+            <strong class="${entry.value === null ? "is-implicit" : ""}">${entry.value === null ? "0*" : format(entry.value, 2)}</strong>
+          `
+        )
+        .join("")}
+    </span>
+  `;
+}
+
+function coordinatePreviewHTML() {
+  const { row, column } = predictionExample;
+  const userVector = model.userFactors[row];
+  const movieVector = model.movieFactors.map((factorRow) => factorRow[column]);
+
+  return `
+    <span class="coordinate-preview">
+      <span></span>
+      <strong>Factor 1</strong>
+      <strong>Factor 2</strong>
+      <span>${users[row]}</span>
+      ${userVector.map((value) => `<b>${format(value, 2)}</b>`).join("")}
+      <span>${movies[column]}</span>
+      ${movieVector.map((value) => `<b>${format(value, 2)}</b>`).join("")}
+    </span>
+  `;
+}
+
+function hiddenFactorsPreviewHTML() {
+  return `
+    <span class="hidden-factor-preview">
+      ${model.singularValues
+        .map(
+          (value, index) => `
+            <span>Factor ${index + 1}</span>
+            <strong>${format(value, 2)}</strong>
+            <em>${index === 0 ? "strongest direction in A" : "next strongest direction in A"}</em>
+          `
+        )
+        .join("")}
+    </span>
+  `;
+}
+
+function factorCoordinateRowsHTML({ values, description }) {
+  return `
+    <div class="factor-coordinate-rows">
+      ${values
+        .map(
+          (value, index) => `
+            <div>
+              <span>Factor ${index + 1}</span>
+              <strong>${format(value, 2)}</strong>
+              <em>${description(index)}</em>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function sourcePillHTML({ label, title, body }) {
+  return `
+    <span class="source-pill">
+      ${label}
+      ${infoPreviewHTML({ label: `Preview ${label}`, title, body })}
+    </span>
+  `;
+}
+
 function sparseMapHTML({ focused = false } = {}) {
   const rowSet = new Set(focused ? focusUserIndices : users.map((_, index) => index));
   const columnSet = new Set(focused ? focusMovieIndices : movies.map((_, index) => index));
@@ -389,52 +517,122 @@ function sparseMapHTML({ focused = false } = {}) {
   `;
 }
 
-function svdHTML() {
+function hiddenAxesHTML() {
   const bars = model.singularValues
     .map((value, index) => {
       const width = `${(value / model.singularValues[0]) * 100}%`;
-      return `<span class="factor-bar" style="--w:${width};--delay:${index * 140}ms"></span>`;
+      return `
+        <div class="axis-row" style="--delay:${index * 140}ms">
+          <span>Hidden factor ${index + 1}</span>
+          <strong>${format(value, 2)}</strong>
+          <div class="axis-bar"><span style="--w:${width}"></span></div>
+        </div>
+      `;
     })
     .join("");
-  const { row, column } = predictionExample;
-  const userVector = model.userFactors[row].map((value) => format(value, 2)).join(", ");
-  const movieVector = model.movieFactors.map((factorRow) => format(factorRow[column], 2)).join(", ");
 
   return `
-    <div class="svd-scene">
-      <div class="formula-scene compact">
-        <div class="factor-block">
-          <span class="factor-label">Input</span>
-          <strong class="factor-symbol">A</strong>
-          <span class="factor-label">sparse residual matrix</span>
+    <div class="svd-origin-scene">
+      <div class="origin-panel">
+        <div class="matrix-title">
+          <strong>Source matrix A</strong>
+          ${sourcePillHTML({
+            label: "from Step 5",
+            title: "A is the sparse residual matrix",
+            body: residualMatrixPreviewHTML(),
+          })}
         </div>
-        <div class="operator">=</div>
-        <div class="factor-block">
-          <span class="factor-label">Users become coordinates</span>
-          <strong class="factor-symbol">U</strong>
-          <span class="factor-label">${users[targetUserIndex]} -> [${userVector}]</span>
-        </div>
-        <div class="operator">x</div>
-        <div class="factor-block">
-          <span class="factor-label">Movies become coordinates</span>
-          <strong class="factor-symbol">ΣVᵀ</strong>
-          <div class="factor-mini">${bars}</div>
-          <span class="factor-label">${movies[column]} -> [${movieVector}]</span>
-        </div>
+        <p>The input is not raw star ratings. It is the residual matrix: known rating minus movie average, with missing values behaving as 0*.</p>
       </div>
-      <div class="svd-note-grid">
-        <div>
-          <span class="factor-label">What SVD is doing</span>
-          <strong>It compresses the residual matrix into two hidden axes.</strong>
+      <div class="origin-panel">
+        <div class="matrix-title">
+          <strong>SVD finds directions</strong>
+          ${sourcePillHTML({
+            label: "kept factors",
+            title: "Two strongest directions",
+            body: hiddenFactorsPreviewHTML(),
+          })}
         </div>
-        <div>
-          <span class="factor-label">What the axes mean</span>
-          <strong>They are learned patterns, not manually named genres.</strong>
+        <p>TruncatedSVD keeps the two strongest hidden directions in A. They are not genre labels; they are mathematical patterns that explain residuals.</p>
+      </div>
+      <div class="axis-list">${bars}</div>
+    </div>
+  `;
+}
+
+function userCoordinatesHTML() {
+  const { row } = predictionExample;
+  const userCoordinates = model.userFactors[row];
+  const userVector = userCoordinates.map((value) => format(value, 2)).join(", ");
+
+  return `
+    <div class="coordinate-origin-scene">
+      <div class="origin-panel">
+        <div class="matrix-title">
+          <strong>${users[row]}'s residual row</strong>
+          ${sourcePillHTML({
+            label: "row from A",
+            title: `${users[row]}'s visible residuals`,
+            body: residualVectorPreviewHTML({ axis: "row", index: row }),
+          })}
         </div>
-        <div>
-          <span class="factor-label">Why singular values matter</span>
-          <strong>${model.singularValues.map((v) => format(v, 2)).join(" and ")} show how strong the two kept patterns are.</strong>
+        <p>This row is the source. It says how ${users[row]}'s known ratings differ from each movie's average.</p>
+      </div>
+      <div class="coordinate-arrow">=</div>
+      <div class="origin-panel">
+        <div class="matrix-title">
+          <strong>User coordinates</strong>
+          ${sourcePillHTML({
+            label: "hidden axes",
+            title: "Coordinates use these same factors",
+            body: hiddenFactorsPreviewHTML(),
+          })}
         </div>
+        <p>SVD compares that row with each hidden factor and gives the user one number per factor.</p>
+        ${factorCoordinateRowsHTML({
+          values: userCoordinates,
+          description: (index) => `${users[row]}'s position on hidden factor ${index + 1}`,
+        })}
+        <span class="factor-label">${users[row]} -> [${userVector}]</span>
+      </div>
+    </div>
+  `;
+}
+
+function movieCoordinatesHTML() {
+  const { column } = predictionExample;
+  const movieCoordinates = model.movieFactors.map((factorRow) => factorRow[column]);
+  const movieVector = movieCoordinates.map((value) => format(value, 2)).join(", ");
+
+  return `
+    <div class="coordinate-origin-scene">
+      <div class="origin-panel">
+        <div class="matrix-title">
+          <strong>${movies[column]}'s residual column</strong>
+          ${sourcePillHTML({
+            label: "column from A",
+            title: `${movies[column]}'s visible residuals`,
+            body: residualVectorPreviewHTML({ axis: "column", index: column }),
+          })}
+        </div>
+        <p>This column is the source. It says which users rated ${movies[column]} above or below that movie's average.</p>
+      </div>
+      <div class="coordinate-arrow">=</div>
+      <div class="origin-panel">
+        <div class="matrix-title">
+          <strong>Movie coordinates</strong>
+          ${sourcePillHTML({
+            label: "same axes",
+            title: "Movies use the same hidden factors",
+            body: hiddenFactorsPreviewHTML(),
+          })}
+        </div>
+        <p>SVD places the movie on the same hidden factors as the users, so the next step can compare matching coordinates.</p>
+        ${factorCoordinateRowsHTML({
+          values: movieCoordinates,
+          description: (index) => `${movies[column]}'s position on hidden factor ${index + 1}`,
+        })}
+        <span class="factor-label">${movies[column]} -> [${movieVector}]</span>
       </div>
     </div>
   `;
@@ -469,7 +667,7 @@ function baselineCalculationHTML() {
           </div>
           <div class="formula-line emphasis">
             <span>3. SVD receives the deviation, not the raw rating</span>
-            <strong>${users[row]} is ${format(Math.abs(residual), 2)} ${residual >= 0 ? "above" : "below"} the ${movies[column]} baseline</strong>
+            <strong>${users[row]} is ${format(Math.abs(residual), 2)} ${residual >= 0 ? "above" : "below"} this movie's baseline</strong>
           </div>
         </div>
       </div>
@@ -496,7 +694,14 @@ function svdCalculationHTML() {
       <div class="calc-panel dot-product-panel">
         <div class="matrix-title">
           <strong>One blank cell</strong>
-          <span>Predict ${movies[column]} for ${users[row]}</span>
+          <span>
+            Predict ${movies[column]} for ${users[row]}
+            ${infoPreviewHTML({
+              label: "Preview the SVD coordinates from the previous step",
+              title: "These coordinates came from Steps 7 and 8",
+              body: coordinatePreviewHTML(),
+            })}
+          </span>
         </div>
 
         <div class="dot-intro">
@@ -609,6 +814,7 @@ function recommendationsHTML() {
 
 const steps = [
   {
+    tab: "Full Matrix",
     title: "Start with the full rating matrix",
     text: "The backend calculates with all 10 users and all 16 movies. Blank cells mean the user has not rated that movie.",
     inspectorTitle: "Data meaning",
@@ -621,6 +827,7 @@ const steps = [
       }),
   },
   {
+    tab: "Focus",
     title: "We crop the view for visualization purposes",
     text: "The calculation still uses the full matrix, but the visualization now focuses on a smaller slice so each step is readable.",
     inspectorTitle: "Display-only crop",
@@ -635,6 +842,7 @@ const steps = [
       }),
   },
   {
+    tab: "Sparse",
     title: "Sparse storage keeps only known ratings",
     text: "The matrix has many blanks, so the sparse representation stores coordinates and values only for ratings that actually exist.",
     inspectorTitle: "Sparse matrix",
@@ -642,6 +850,7 @@ const steps = [
     render: () => sparseMapHTML({ focused: true }),
   },
   {
+    tab: "Average",
     title: "Compute one movie-average baseline",
     text: "Before SVD, each movie gets a simple baseline: its average known rating. Then every real rating is replaced by rating minus movie average, so SVD learns what is unusually high or low instead of relearning that some movies are generally rated higher.",
     inspectorTitle: "Baseline idea",
@@ -649,8 +858,9 @@ const steps = [
     render: baselineCalculationHTML,
   },
   {
+    tab: "Residual",
     title: "Build the SVD input matrix",
-    text: "Known ratings become residual numbers rappresenting how much the user liked or disliked the movie compared to the movie average. Missing ratings become implicit zero residuals, shown as 0*, meaning no known deviation from the movie average.",
+    text: "Known ratings become residual numbers representing how much the user liked or disliked the movie compared to the movie average. Missing ratings become implicit zero residuals, shown as 0*, meaning no known deviation from the movie average.",
     inspectorTitle: "SVD input",
     inspectorText: "0* is not a rating. It is how the sparse matrix behaves mathematically for unstored entries during TruncatedSVD.",
     render: () =>
@@ -667,13 +877,31 @@ const steps = [
       }),
   },
   {
-    title: "SVD creates hidden coordinates",
-    text: "SVD takes the residual matrix and gives every user and movie a short coordinate list. Each coordinate is a hidden factor: an unnamed pattern learned from the ratings.",
-    inspectorTitle: "Hidden factors",
-    inspectorText: "Factor 1 and Factor 2 are not labels we chose. They are the two strongest hidden directions SVD kept from the data.",
-    render: svdHTML,
+    tab: "Hidden Axes",
+    title: "SVD first finds hidden axes",
+    text: "The residual matrix A is the source. TruncatedSVD looks through A and keeps the two strongest directions that explain rating deviations.",
+    inspectorTitle: "Where axes come from",
+    inspectorText: "The axes come from the residual matrix, not from manual genre labels. Their singular values show how strong those two directions are.",
+    render: hiddenAxesHTML,
   },
   {
+    tab: "User Coords",
+    title: "A user row becomes coordinates",
+    text: `For ${users[predictionExample.row]}, SVD turns the user's residual row into one coordinate on each hidden factor.`,
+    inspectorTitle: "User coordinate source",
+    inspectorText: "A user's coordinates come from that user's row in A. The row is compared with the hidden axes found in the previous step.",
+    render: userCoordinatesHTML,
+  },
+  {
+    tab: "Movie Coords",
+    title: "A movie column becomes coordinates",
+    text: `For ${movies[predictionExample.column]}, SVD turns the movie's residual column into matching coordinates on the same hidden factors.`,
+    inspectorTitle: "Movie coordinate source",
+    inspectorText: "A movie's coordinates come from that movie's column in A. Users and movies must use the same axes so their matching coordinates can be multiplied.",
+    render: movieCoordinatesHTML,
+  },
+  {
+    tab: "Dot Product",
     title: "Compare coordinates with a dot product",
     text: "For one blank cell, SVD compares the user's coordinates and the movie's coordinates on the same hidden factors. The result becomes an adjustment to the movie average.",
     inspectorTitle: "Dot product",
@@ -681,6 +909,7 @@ const steps = [
     render: svdCalculationHTML,
   },
   {
+    tab: "Predict",
     title: "The matrix is reconstructed as predictions",
     text: "The model reconstructs estimated residuals for every cell, then adds movie averages back to get predicted ratings from 1 to 5.",
     inspectorTitle: "Prediction",
@@ -695,6 +924,7 @@ const steps = [
       }),
   },
   {
+    tab: "Recommend",
     title: "Recommend the highest unrated movies",
     text: `For ${users[targetUserIndex]}, the system filters out movies already rated and ranks the remaining predictions.`,
     inspectorTitle: "Final rule",
@@ -710,6 +940,27 @@ function getInitialStep() {
 
 let currentStep = getInitialStep();
 let playTimer = null;
+
+function renderStepTabs() {
+  els.stepRail.innerHTML = steps
+    .map(
+      (step, index) => `
+        <button class="step-tab" type="button" data-step="${index}">
+          <span>${String(index + 1).padStart(2, "0")}</span>
+          ${step.tab}
+        </button>
+      `
+    )
+    .join("");
+
+  els.tabs = [...els.stepRail.querySelectorAll(".step-tab")];
+  els.tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      setPlaying(false);
+      renderStep(Number(tab.dataset.step));
+    });
+  });
+}
 
 function renderStep(index) {
   currentStep = (index + steps.length) % steps.length;
@@ -781,13 +1032,7 @@ els.playPause.addEventListener("click", () => {
   setPlaying(!playTimer);
 });
 
-els.tabs.forEach((tab) => {
-  tab.addEventListener("click", () => {
-    setPlaying(false);
-    renderStep(Number(tab.dataset.step));
-  });
-});
-
+renderStepTabs();
 refreshMetrics();
 renderStep(currentStep);
 loadBackendModel();

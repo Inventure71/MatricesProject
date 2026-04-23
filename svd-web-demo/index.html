@@ -27,48 +27,12 @@
           </div>
         </header>
 
-        <aside class="step-rail" aria-label="Process steps">
-          <button class="step-tab is-active" type="button" data-step="0">
-            <span>01</span>
-            Full Matrix
-          </button>
-          <button class="step-tab" type="button" data-step="1">
-            <span>02</span>
-            Focus
-          </button>
-          <button class="step-tab" type="button" data-step="2">
-            <span>03</span>
-            Sparse
-          </button>
-          <button class="step-tab" type="button" data-step="3">
-            <span>04</span>
-            Average
-          </button>
-          <button class="step-tab" type="button" data-step="4">
-            <span>05</span>
-            Residual
-          </button>
-          <button class="step-tab" type="button" data-step="5">
-            <span>06</span>
-            SVD
-          </button>
-          <button class="step-tab" type="button" data-step="6">
-            <span>07</span>
-            Dot Product
-          </button>
-          <button class="step-tab" type="button" data-step="7">
-            <span>08</span>
-            Predict
-          </button>
-          <button class="step-tab" type="button" data-step="8">
-            <span>09</span>
-            Recommend
-          </button>
+        <aside class="step-rail" id="stepRail" aria-label="Process steps">
         </aside>
 
         <section class="stage" aria-live="polite">
           <div class="stage-copy">
-            <p class="step-count" id="stepCount">Step 1 of 9</p>
+            <p class="step-count" id="stepCount">Step 1 of 11</p>
             <h2 id="stepTitle">The original rating matrix is sparse</h2>
             <p id="stepText">
               Each row is a user, each column is a movie, and blank cells mean the user has not rated that movie.
