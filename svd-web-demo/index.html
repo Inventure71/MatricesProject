@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sparse SVD Movie Recommender</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace" aria-label="Sparse SVD recommender demo">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Matrices Project</p>
+            <h1>Sparse SVD Movie Recommender</h1>
+          </div>
+          <div class="controls" aria-label="Demo controls">
+            <button class="icon-button" id="previousStep" type="button" aria-label="Previous step" title="Previous step">
+              <span aria-hidden="true">‹</span>
+            </button>
+            <button class="primary-button" id="playPause" type="button">
+              <span id="playLabel">Play</span>
+            </button>
+            <button class="icon-button" id="nextStep" type="button" aria-label="Next step" title="Next step">
+              <span aria-hidden="true">›</span>
+            </button>
+          </div>
+        </header>
+
+        <aside class="step-rail" aria-label="Process steps">
+          <button class="step-tab is-active" type="button" data-step="0">
+            <span>01</span>
+            Full Matrix
+          </button>
+          <button class="step-tab" type="button" data-step="1">
+            <span>02</span>
+            Focus
+          </button>
+          <button class="step-tab" type="button" data-step="2">
+            <span>03</span>
+            Sparse
+          </button>
+          <button class="step-tab" type="button" data-step="3">
+            <span>04</span>
+            Average
+          </button>
+          <button class="step-tab" type="button" data-step="4">
+            <span>05</span>
+            Residual
+          </button>
+          <button class="step-tab" type="button" data-step="5">
+            <span>06</span>
+            SVD
+          </button>
+          <button class="step-tab" type="button" data-step="6">
+            <span>07</span>
+            Dot Product
+          </button>
+          <button class="step-tab" type="button" data-step="7">
+            <span>08</span>
+            Predict
+          </button>
+          <button class="step-tab" type="button" data-step="8">
+            <span>09</span>
+            Recommend
+          </button>
+        </aside>
+
+        <section class="stage" aria-live="polite">
+          <div class="stage-copy">
+            <p class="step-count" id="stepCount">Step 1 of 9</p>
+            <h2 id="stepTitle">The original rating matrix is sparse</h2>
+            <p id="stepText">
+              Each row is a user, each column is a movie, and blank cells mean the user has not rated that movie.
+            </p>
+          </div>
+          <div class="visual-plane" id="visualPlane"></div>
+        </section>
+
+        <aside class="inspector">
+          <div class="metric-row">
+            <span>Total cells</span>
+            <strong id="totalCells">30</strong>
+          </div>
+          <div class="metric-row">
+            <span>Known ratings</span>
+            <strong id="knownRatings">17</strong>
+          </div>
+          <div class="metric-row">
+            <span>Sparsity</span>
+            <strong id="sparsity">43.3%</strong>
+          </div>
+          <div class="divider"></div>
+          <h3 id="inspectorTitle">Data meaning</h3>
+          <p id="inspectorText">
+            Missing ratings stay unknown. The demo never stores them as fake low ratings such as -1.
+          </p>
+        </aside>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
