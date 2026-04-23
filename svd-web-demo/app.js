@@ -8,7 +8,7 @@ let users = [
   "User 7",
   "User 8",
   "User 9",
-  "User 10",
+  "You",
 ];
 let movies = [
   "The Matrix",
@@ -41,18 +41,28 @@ let ratings = [
   [3, 4, 4, 3, null, 4, null, 4, 3, null, 4, null, 5, 4, 5, 4],
 ];
 
-let targetUserIndex = 8;
+let targetUserIndex = 9;
 const factorCount = 2;
-const focusUserIndices = [0, 1, 4, 6, 8];
+const focusUserIndices = [0, 1, 4, 6, 9];
 const focusMovieIndices = [0, 1, 2, 3, 4, 5, 7, 10, 11];
-const baselineExample = { row: 8, column: 0 };
-const predictionExample = { row: 8, column: 4 };
+const baselineExample = { row: 9, column: 0 };
+const predictionExample = { row: 9, column: 4 };
+const defaultTargetRatings = [...ratings[targetUserIndex]];
+
+function targetLastUserIndices() {
+  return users.map((_, index) => index).filter((index) => index !== targetUserIndex).concat(targetUserIndex);
+}
 
 const els = {
+  workspace: document.querySelector(".workspace"),
   visualPlane: document.querySelector("#visualPlane"),
+  inspector: document.querySelector("#inspector"),
   stepCount: document.querySelector("#stepCount"),
   stepTitle: document.querySelector("#stepTitle"),
   stepText: document.querySelector("#stepText"),
+  stageNote: document.querySelector("#stageNote"),
+  stageNoteTitle: document.querySelector("#stageNoteTitle"),
+  stageNoteText: document.querySelector("#stageNoteText"),
   inspectorTitle: document.querySelector("#inspectorTitle"),
   inspectorText: document.querySelector("#inspectorText"),
   stepRail: document.querySelector("#stepRail"),
@@ -65,6 +75,8 @@ const els = {
   playLabel: document.querySelector("#playLabel"),
   tabs: [],
 };
+
+const sparseStepIndex = 2;
 
 function mean(values) {
   const known = values.filter((value) => value !== null && Number.isFinite(value));
@@ -272,6 +284,7 @@ function matrixHTML({
   values,
   mode = "ratings",
   highlightMissingForUser = false,
+  highlightTargetRow = false,
   embedded = false,
   showImplicitZeros = false,
   rowIndices = users.map((_, index) => index),
@@ -297,7 +310,10 @@ function matrixHTML({
     .filter((_, rowIndex) => rowIndices.includes(rowIndex))
     .map((row, filteredRowIndex) => {
       const rowIndex = rowIndices[filteredRowIndex];
-      const rowHeader = `<div class="cell"><span>${users[rowIndex]}</span></div>`;
+      const isTargetRow = highlightTargetRow && rowIndex === targetUserIndex;
+      const rowHeaderClassNames = ["cell"];
+      if (isTargetRow) rowHeaderClassNames.push("target-user-cell", "target-user-header");
+      const rowHeader = `<div class="${rowHeaderClassNames.join(" ")}"><span>${users[rowIndex]}</span></div>`;
       const cells = movieIndices
         .map((columnIndex) => {
           const value = row[columnIndex];
@@ -305,6 +321,7 @@ function matrixHTML({
           const isRecommendation =
             highlightMissingForUser && rowIndex === targetUserIndex && isMissing;
           const classNames = ["cell"];
+          if (isTargetRow) classNames.push("target-user-cell");
           let text = "";
           let style = "";
 
@@ -348,6 +365,101 @@ function matrixHTML({
       </div>
     </div>
   `;
+}
+
+function ratingEditorHTML() {
+  const controls = movies
+    .map((movie, columnIndex) => {
+      const currentRating = ratings[targetUserIndex][columnIndex];
+      const ratingButtons = [1, 2, 3, 4, 5]
+        .map((rating) => {
+          const isActive = currentRating === rating;
+          return `
+            <button
+              class="rating-choice${isActive ? " is-active" : ""}"
+              type="button"
+              data-rating-column="${columnIndex}"
+              data-rating-value="${rating}"
+              aria-pressed="${isActive}"
+              aria-label="Set ${movie} rating to ${rating}"
+            >${rating}</button>
+          `;
+        })
+        .join("");
+      const isUnrated = currentRating === null;
+
+      return `
+        <div class="rating-control">
+          <span class="rating-movie">${movie}</span>
+          <div class="rating-options" aria-label="${movie} rating">
+            ${ratingButtons}
+            <button
+              class="rating-clear${isUnrated ? " is-active" : ""}"
+              type="button"
+              data-rating-column="${columnIndex}"
+              data-clear-rating="true"
+              aria-pressed="${isUnrated}"
+              aria-label="Clear ${movie} rating"
+              title="Clear rating"
+            >Clear</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <section class="rating-editor" aria-label="Your editable movie ratings">
+      <div class="rating-editor-head">
+        <div>
+          <strong>Your ratings</strong>
+          <span>Clear means unrated, so the movie can be recommended again.</span>
+        </div>
+        <button class="reset-ratings" type="button" data-reset-ratings="true">Reset</button>
+      </div>
+      <div class="rating-grid">${controls}</div>
+    </section>
+  `;
+}
+
+function recomputeModel() {
+  model = computeModel();
+  refreshMetrics();
+}
+
+function updateTargetRating(columnIndex, value) {
+  ratings[targetUserIndex][columnIndex] = value;
+  recomputeModel();
+  renderStep(currentStep);
+}
+
+function resetTargetRatings() {
+  ratings[targetUserIndex] = [...defaultTargetRatings];
+  recomputeModel();
+  renderStep(currentStep);
+}
+
+function bindRatingEditor() {
+  els.visualPlane.querySelectorAll("[data-rating-value]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setPlaying(false);
+      updateTargetRating(Number(button.dataset.ratingColumn), Number(button.dataset.ratingValue));
+    });
+  });
+
+  els.visualPlane.querySelectorAll("[data-clear-rating]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setPlaying(false);
+      updateTargetRating(Number(button.dataset.ratingColumn), null);
+    });
+  });
+
+  els.visualPlane.querySelectorAll("[data-reset-ratings]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setPlaying(false);
+      resetTargetRatings();
+    });
+  });
 }
 
 function infoPreviewHTML({ label, title, body }) {
@@ -508,7 +620,7 @@ function sparseMapHTML({ focused = false } = {}) {
       <div>
         <div class="matrix-title">
           <strong>Only known ratings are stored</strong>
-          <span>${visibleEntries.length} visible coordinates; ${knownRatings} used by the backend</span>
+          <span>${visibleEntries.length} visible coordinates; ${knownRatings} used by the calculation</span>
         </div>
         <div class="dot-field" style="background-size:calc(100% / ${visibleColumns}) calc(100% / ${visibleRows})">${dots}</div>
       </div>
@@ -771,9 +883,9 @@ function svdCalculationHTML() {
 function recommendationsHTML() {
   const rowCells = model.predictedRatings[targetUserIndex]
     .map((score, columnIndex) => {
-      const originallyRated = ratings[targetUserIndex][columnIndex] !== null;
-      const classNames = ["cell", originallyRated ? "known" : "recommendation"];
-      const style = originallyRated
+      const ratedByYou = ratings[targetUserIndex][columnIndex] !== null;
+      const classNames = ["cell", ratedByYou ? "known" : "recommendation"];
+      const style = ratedByYou
         ? "--cell-color:hsl(174 45% 72%);--cell-opacity:0.82;"
         : "--cell-color:hsl(43 66% 72%);--cell-opacity:0.9;";
       return `
@@ -803,9 +915,10 @@ function recommendationsHTML() {
       <div class="target-user-panel">
         <div class="matrix-title">
           <strong>${users[targetUserIndex]} predicted ratings</strong>
-          <span>gold outline = originally unrated</span>
+          <span>gold outline = currently unrated</span>
         </div>
         <div class="target-row">${rowCells}</div>
+        ${ratingEditorHTML()}
       </div>
       <div class="rank-list">${items}</div>
     </div>
@@ -816,22 +929,28 @@ const steps = [
   {
     tab: "Full Matrix",
     title: "Start with the full rating matrix",
-    text: "The backend calculates with all 10 users and all 16 movies. Blank cells mean the user has not rated that movie.",
-    inspectorTitle: "Data meaning",
-    inspectorText: "Missing ratings stay unknown. The demo never stores them as fake low ratings such as -1.",
-    render: () =>
-      matrixHTML({
-        title: "Original user-movie ratings",
-        note: "blank = not rated",
-        values: ratings,
-      }),
+    text: "The highlighted row is you. It starts with sample ratings, and you can edit that row below to see how the recommendations change.",
+    inspectorTitle: "Your row",
+    inspectorText: "Blank means unrated. Clearing a rating removes it from your known row, so that movie becomes eligible for recommendation again.",
+    render: () => `
+      <div class="editable-matrix-scene">
+        ${matrixHTML({
+          title: "Original user-movie ratings",
+          note: "highlighted row = editable",
+          values: ratings,
+          highlightTargetRow: true,
+          rowIndices: targetLastUserIndices(),
+        })}
+        ${ratingEditorHTML()}
+      </div>
+    `,
   },
   {
     tab: "Focus",
     title: "We crop the view for visualization purposes",
     text: "The calculation still uses the full matrix, but the visualization now focuses on a smaller slice so each step is readable.",
     inspectorTitle: "Display-only crop",
-    inspectorText: "This crop includes sci-fi fans, romance fans, and the target user. It does not change the backend result.",
+    inspectorText: "This crop includes sci-fi fans, romance fans, and you. It does not change the calculation result.",
     render: () =>
       matrixHTML({
             title: "Focused working view",
@@ -928,7 +1047,7 @@ const steps = [
     title: "Recommend the highest unrated movies",
     text: `For ${users[targetUserIndex]}, the system filters out movies already rated and ranks the remaining predictions.`,
     inspectorTitle: "Final rule",
-    inspectorText: "Recommendations are not taken from watched movies. They come from the highest predicted scores among originally blank cells.",
+    inspectorText: "Recommendations are not taken from watched movies. They come from the highest predicted scores among cells that are currently blank.",
     render: recommendationsHTML,
   },
 ];
@@ -965,46 +1084,24 @@ function renderStepTabs() {
 function renderStep(index) {
   currentStep = (index + steps.length) % steps.length;
   const step = steps[currentStep];
+  const showsSparseInspector = currentStep === sparseStepIndex;
 
   els.stepCount.textContent = `Step ${currentStep + 1} of ${steps.length}`;
   els.stepTitle.textContent = step.title;
   els.stepText.textContent = step.text;
+  els.workspace.classList.toggle("has-side-inspector", showsSparseInspector);
+  els.inspector.hidden = !showsSparseInspector;
+  els.stageNote.hidden = showsSparseInspector;
+  els.stageNoteTitle.textContent = step.inspectorTitle;
+  els.stageNoteText.textContent = step.inspectorText;
   els.inspectorTitle.textContent = step.inspectorTitle;
   els.inspectorText.textContent = step.inspectorText;
   els.visualPlane.innerHTML = step.render();
+  bindRatingEditor();
 
   els.tabs.forEach((tab) => {
     tab.classList.toggle("is-active", Number(tab.dataset.step) === currentStep);
   });
-}
-
-async function loadBackendModel() {
-  try {
-    const response = await fetch("/api/model");
-    if (!response.ok) return;
-    const payload = await response.json();
-
-    users = payload.users;
-    movies = payload.movies;
-    ratings = payload.ratings;
-    targetUserIndex = payload.targetUserIndex;
-    model = {
-      globalAverage: payload.globalAverage,
-      movieAverages: payload.movieAverages,
-      residualMatrix: payload.residualMatrix,
-      sparseEntries: payload.sparseEntries,
-      singularValues: payload.singularValues,
-      userFactors: payload.userFactors,
-      movieFactors: payload.movieFactors,
-      predictedRatings: payload.predictedRatings,
-      recommendations: payload.recommendations,
-    };
-
-    refreshMetrics();
-    renderStep(currentStep);
-  } catch {
-    refreshMetrics();
-  }
 }
 
 function setPlaying(nextPlaying) {
@@ -1035,4 +1132,3 @@ els.playPause.addEventListener("click", () => {
 renderStepTabs();
 refreshMetrics();
 renderStep(currentStep);
-loadBackendModel();

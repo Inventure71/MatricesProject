@@ -41,7 +41,7 @@ MOVIES = [
     "Amelie",
 ]
 
-TARGET_USER = "User 9"
+TARGET_USER = "User 10"
 N_COMPONENTS = 2
 
 
