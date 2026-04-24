@@ -1,9 +1,9 @@
 """
 Sparse matrix + SVD movie recommendation demo.
 
-This script matches the calculation used by the web visualization in
-svd-web-demo/calculator.py. The web demo explains the process step by step;
-this file keeps the same calculation in one Python script.
+This script is the Python CLI/reference version of the calculation shown by the
+web visualization in svd-web-demo/. The web demo explains the process step by
+step; this file keeps the same idea in one Python script.
 
 Important meaning of the data:
 - np.nan means "not rated"; it is not a real rating.

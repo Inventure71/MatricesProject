@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - "svd-web-demo/**"
-      - ".github/workflows/pages.yml"
+      - ".github/workflows/static.yml"
   workflow_dispatch:
 
 permissions:
