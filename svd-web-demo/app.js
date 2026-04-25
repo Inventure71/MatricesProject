@@ -42,7 +42,14 @@ let ratings = [
 ];
 
 let targetUserIndex = 9;
-const factorCount = 2;
+const factorOptions = [1, 2, 3, 4, 5];
+function getInitialFactorCount() {
+  const requested = Number(new URLSearchParams(window.location.search).get("k"));
+  return factorOptions.includes(requested) ? requested : 2;
+}
+
+let factorCount = getInitialFactorCount();
+const energyTargetCount = 5;
 const focusUserIndices = [0, 1, 4, 6, 9];
 const focusMovieIndices = [0, 1, 2, 3, 4, 5, 7, 10, 11];
 const baselineExample = { row: 9, column: 0 };
@@ -73,6 +80,7 @@ const els = {
   nextStep: document.querySelector("#nextStep"),
   playPause: document.querySelector("#playPause"),
   playLabel: document.querySelector("#playLabel"),
+  kControl: document.querySelector("#kControl"),
   tabs: [],
 };
 
@@ -200,7 +208,24 @@ function computeModel() {
 
   const residualT = transpose(residualMatrix);
   const covariance = multiply(residualT, residualMatrix);
-  const eigenPairs = jacobiEigenDecomposition(covariance).slice(0, factorCount);
+  const allEigenPairs = jacobiEigenDecomposition(covariance);
+  const totalEnergy = allEigenPairs.reduce((sum, pair) => sum + pair.value, 0);
+  const componentEnergy = allEigenPairs.map((pair, index) => {
+    const cumulativeEnergy = allEigenPairs
+      .slice(0, index + 1)
+      .reduce((sum, item) => sum + item.value, 0);
+
+    return {
+      component: index + 1,
+      singularValue: Math.sqrt(pair.value),
+      energy: pair.value,
+      cumulativeEnergy,
+      cumulativeShare: totalEnergy ? cumulativeEnergy / totalEnergy : 0,
+      kept: index < factorCount,
+      target: index + 1 === energyTargetCount,
+    };
+  });
+  const eigenPairs = allEigenPairs.slice(0, factorCount);
   const singularValues = eigenPairs.map((pair) => Math.sqrt(pair.value));
   const components = eigenPairs.map((pair) => pair.vector);
   const componentColumns = transpose(components);
@@ -237,6 +262,9 @@ function computeModel() {
     sparseEntries,
     covariance,
     singularValues,
+    allSingularValues: allEigenPairs.map((pair) => Math.sqrt(pair.value)),
+    totalEnergy,
+    componentEnergy,
     components,
     userFactors,
     movieFactors: components,
@@ -427,6 +455,47 @@ function recomputeModel() {
   refreshMetrics();
 }
 
+function kControlHTML() {
+  return `
+    <span class="k-label">k</span>
+    ${factorOptions
+      .map(
+        (value) => `
+          <button
+            class="k-choice${value === factorCount ? " is-active" : ""}"
+            type="button"
+            data-k-value="${value}"
+            aria-pressed="${value === factorCount}"
+            aria-label="Use k equals ${value}"
+          >${value}</button>
+        `
+      )
+      .join("")}
+  `;
+}
+
+function renderKControl() {
+  els.kControl.innerHTML = kControlHTML();
+  els.kControl.querySelectorAll("[data-k-value]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setPlaying(false);
+      setFactorCount(Number(button.dataset.kValue));
+    });
+  });
+}
+
+function setFactorCount(nextFactorCount) {
+  factorCount = nextFactorCount;
+  recomputeModel();
+  renderKControl();
+  renderStep(currentStep);
+
+  const params = new URLSearchParams(window.location.search);
+  params.set("k", String(factorCount));
+  params.set("step", String(currentStep));
+  window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+}
+
 function updateTargetRating(columnIndex, value) {
   ratings[targetUserIndex][columnIndex] = value;
   recomputeModel();
@@ -532,12 +601,12 @@ function coordinatePreviewHTML() {
   const { row, column } = predictionExample;
   const userVector = model.userFactors[row];
   const movieVector = model.movieFactors.map((factorRow) => factorRow[column]);
+  const columns = `96px repeat(${factorCount}, minmax(82px, 1fr))`;
 
   return `
-    <span class="coordinate-preview">
+    <span class="coordinate-preview" style="grid-template-columns:${columns}">
       <span></span>
-      <strong>Factor 1</strong>
-      <strong>Factor 2</strong>
+      ${userVector.map((_, index) => `<strong>Factor ${index + 1}</strong>`).join("")}
       <span>${users[row]}</span>
       ${userVector.map((value) => `<b>${format(value, 2)}</b>`).join("")}
       <span>${movies[column]}</span>
@@ -630,6 +699,28 @@ function sparseMapHTML({ focused = false } = {}) {
 }
 
 function hiddenAxesHTML() {
+  const chosenEnergy = model.componentEnergy[factorCount - 1];
+  const targetEnergy = model.componentEnergy[energyTargetCount - 1];
+  const targetSentence =
+    factorCount === energyTargetCount
+      ? `This reaches the report-style 80%-90% target for the larger demo dataset.`
+      : `For the report-style 80%-90% target on this larger dataset, k = ${energyTargetCount} preserves ${format(targetEnergy.cumulativeShare * 100, 1)}%.`;
+  const energyRows = model.componentEnergy
+    .slice(0, Math.min(energyTargetCount, model.componentEnergy.length))
+    .map((item) => {
+      const width = `${item.cumulativeShare * 100}%`;
+      const label = item.kept ? "shown in demo" : item.target ? "80-90 target" : "extra detail";
+      return `
+        <div class="energy-row${item.kept ? " is-kept" : ""}${item.target ? " is-target" : ""}">
+          <span>k = ${item.component}</span>
+          <strong>${format(item.cumulativeShare * 100, 1)}%</strong>
+          <em>${label}</em>
+          <div class="energy-bar"><span style="--w:${width}"></span></div>
+        </div>
+      `;
+    })
+    .join("");
+
   const bars = model.singularValues
     .map((value, index) => {
       const width = `${(value / model.singularValues[0]) * 100}%`;
@@ -658,14 +749,16 @@ function hiddenAxesHTML() {
       </div>
       <div class="origin-panel">
         <div class="matrix-title">
-          <strong>SVD finds directions</strong>
+          <strong>SVD ranks directions</strong>
           ${sourcePillHTML({
             label: "kept factors",
-            title: "Two strongest directions",
+            title: `${factorCount} strongest direction${factorCount === 1 ? "" : "s"}`,
             body: hiddenFactorsPreviewHTML(),
           })}
         </div>
-        <p>TruncatedSVD keeps the two strongest hidden directions in A. They are not genre labels; they are mathematical patterns that explain residuals.</p>
+        <p>Like the report, the demo chooses k by energy: square each singular value, add the strongest ones, and compare how much of the total information is preserved.</p>
+        <div class="energy-list">${energyRows}</div>
+        <p>The current demo is using k = ${factorCount}, preserving ${format(chosenEnergy.cumulativeShare * 100, 1)}% of the residual energy. ${targetSentence}</p>
       </div>
       <div class="axis-list">${bars}</div>
     </div>
@@ -817,8 +910,8 @@ function svdCalculationHTML() {
         </div>
 
         <div class="dot-intro">
-          <strong>Factor 1 and Factor 2 are hidden taste axes learned by SVD.</strong>
-          <span>We did not name them as genres. They are compressed patterns from the ratings, and every user and movie gets a coordinate on each axis.</span>
+          <strong>The selected k factors are hidden taste axes learned by SVD.</strong>
+          <span>We did not name them as genres. They are compressed patterns from the ratings, and every user and movie gets one coordinate per selected factor.</span>
         </div>
 
         <div class="factor-compare-grid">
@@ -844,7 +937,7 @@ function svdCalculationHTML() {
         <div class="dot-formula-strip">
           <div>
             <span>1. Multiply matching factors</span>
-            <strong>Factor 1 with Factor 1, Factor 2 with Factor 2</strong>
+            <strong>Factor 1 with Factor 1, then repeat through Factor ${factorCount}</strong>
           </div>
           <div>
             <span>2. Add product results</span>
@@ -858,10 +951,10 @@ function svdCalculationHTML() {
       </div>
       <div class="mini-rank dot-summary">
         <strong>Plain meaning</strong>
-        <p>Think of each factor as one question SVD invented to explain rating patterns. The demo keeps two factors so the calculation fits on screen.</p>
+        <p>Think of each factor as one question SVD invented to explain rating patterns. Changing k changes how many questions the model keeps.</p>
         <div>
           <span>Not a genre label</span>
-          <b>Factor 1 does not literally mean sci-fi, and Factor 2 does not literally mean romance.</b>
+          <b>The factors do not literally mean sci-fi, romance, or any manual category.</b>
         </div>
         <div>
           <span>Same sign</span>
@@ -997,10 +1090,10 @@ const steps = [
   },
   {
     tab: "Hidden Axes",
-    title: "SVD first finds hidden axes",
-    text: "The residual matrix A is the source. TruncatedSVD looks through A and keeps the two strongest directions that explain rating deviations.",
-    inspectorTitle: "Where axes come from",
-    inspectorText: "The axes come from the residual matrix, not from manual genre labels. Their singular values show how strong those two directions are.",
+    title: "Choose k by preserved energy",
+    text: "Use the k buttons at the top to choose how many hidden factors SVD keeps. The energy table updates with the current choice; on this larger demo matrix, k = 5 is the 80%-90% choice.",
+    inspectorTitle: "Why show k = 5",
+    inspectorText: "The top control changes the actual calculation, including user coordinates, movie coordinates, dot products, predictions, and recommendations.",
     render: hiddenAxesHTML,
   },
   {
@@ -1130,5 +1223,6 @@ els.playPause.addEventListener("click", () => {
 });
 
 renderStepTabs();
+renderKControl();
 refreshMetrics();
 renderStep(currentStep);

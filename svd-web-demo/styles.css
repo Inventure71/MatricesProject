@@ -102,6 +102,54 @@ h3 {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.k-control {
+  display: inline-grid;
+  grid-template-columns: auto repeat(5, 32px);
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.82);
+}
+
+.k-label {
+  padding: 0 7px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.k-choice {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 820;
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.k-choice:hover,
+.k-choice:focus-visible {
+  color: var(--accent-strong);
+  transform: translateY(-1px);
+  outline: 0;
+}
+
+.k-choice.is-active {
+  background: var(--accent);
+  color: white;
 }
 
 .icon-button,
@@ -597,6 +645,64 @@ h3 {
 .axis-list {
   display: grid;
   gap: 12px;
+}
+
+.energy-list {
+  display: grid;
+  gap: 8px;
+}
+
+.energy-row {
+  display: grid;
+  grid-template-columns: 56px 64px minmax(70px, auto);
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.energy-row span,
+.energy-row em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 780;
+}
+
+.energy-row strong {
+  color: var(--ink);
+  font-size: 18px;
+  text-align: right;
+}
+
+.energy-row.is-kept strong,
+.energy-row.is-kept em {
+  color: var(--accent-strong);
+}
+
+.energy-row.is-target strong,
+.energy-row.is-target em {
+  color: #8a5c00;
+}
+
+.energy-bar {
+  grid-column: 1 / -1;
+  height: 7px;
+  background: rgba(15, 118, 110, 0.13);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.energy-bar span {
+  display: block;
+  width: var(--w);
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+}
+
+.energy-row.is-target .energy-bar span {
+  background: var(--warm);
 }
 
 .axis-row {
@@ -1307,6 +1413,22 @@ h3 {
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .k-control {
+    order: 2;
+    grid-template-columns: auto repeat(5, minmax(30px, 1fr));
+    width: 100%;
+    border-radius: var(--radius);
+  }
+
+  .k-choice {
+    width: auto;
   }
 
   .visual-plane {

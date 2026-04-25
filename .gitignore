@@ -2,3 +2,5 @@
 *.DS_Store
 Matrices_Project.pdf
 __pycache__/
+tmp/
+Docs/

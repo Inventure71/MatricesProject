@@ -48,7 +48,9 @@ The calculation follows the Python demo idea over a 10 user x 16 movie matrix:
 2. Show the full matrix, then crop the UI to a smaller teaching subset.
 3. Compute movie-average baselines.
 4. Store known rating residuals in a sparse-style matrix.
-5. Run a small truncated SVD calculation.
+5. Run a small truncated SVD calculation, let the user choose `k` from 1 to 5,
+   and show `k = 5` as the 80%-90% cumulative-energy choice for the larger demo
+   matrix.
 6. Show one dot-product prediction step.
 7. Reconstruct predicted ratings.
 8. Recommend the highest predicted unrated movies.
