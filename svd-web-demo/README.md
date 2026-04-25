@@ -39,8 +39,11 @@ python3 demo.py
 
 - `index.html`: page structure
 - `styles.css`: minimal visual design and animations
-- `app.js`: step-by-step renderer, browser-side calculation, and editable
-  "You" rating controls
+- `data.js`: users, movies, and the starting sparse rating matrix
+- `svdMath.js`: pure math functions for averages, residuals, eigenvectors,
+  singular values, predictions, and recommendations
+- `app.js`: step-by-step renderer, editable "You" rating controls, and browser
+  event handling
 
 The calculation follows the Python demo idea over a 10 user x 16 movie matrix:
 
@@ -48,9 +51,10 @@ The calculation follows the Python demo idea over a 10 user x 16 movie matrix:
 2. Show the full matrix, then crop the UI to a smaller teaching subset.
 3. Compute movie-average baselines.
 4. Store known rating residuals in a sparse-style matrix.
-5. Run a small truncated SVD calculation, let the user choose `k` from 1 to 5,
-   and show `k = 5` as the 80%-90% cumulative-energy choice for the larger demo
-   matrix.
-6. Show one dot-product prediction step.
-7. Reconstruct predicted ratings.
-8. Recommend the highest predicted unrated movies.
+5. Run a small truncated SVD calculation, let the user choose `k` from 1 to 6,
+   show `k = 5` as the 80%-90% cumulative-energy choice for the larger demo
+   matrix, and compare it with `k = 6`.
+6. Explain how factors come from `A^T A`, eigenvectors, and singular values.
+7. Show one dot-product prediction step.
+8. Reconstruct predicted ratings.
+9. Recommend the highest predicted unrated movies.

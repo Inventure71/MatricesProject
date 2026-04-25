@@ -1,48 +1,5 @@
-let users = [
-  "User 1",
-  "User 2",
-  "User 3",
-  "User 4",
-  "User 5",
-  "User 6",
-  "User 7",
-  "User 8",
-  "User 9",
-  "You",
-];
-let movies = [
-  "The Matrix",
-  "Interstellar",
-  "Inception",
-  "Dune",
-  "Blade Runner",
-  "Arrival",
-  "Mad Max",
-  "The Martian",
-  "Titanic",
-  "The Notebook",
-  "La La Land",
-  "Barbie",
-  "Pride & Prejudice",
-  "Before Sunrise",
-  "Little Women",
-  "Amelie",
-];
-let ratings = [
-  [5, 5, 4, 5, 4, 5, 4, 5, null, 1, null, 1, null, null, null, null],
-  [4, 5, 5, 4, 5, null, null, null, 2, null, null, null, 2, null, null, null],
-  [5, 4, null, 5, 5, 4, 5, 4, null, 1, null, null, 1, null, null, null],
-  [4, null, 5, 4, 4, null, 4, null, null, null, 2, null, null, null, null, null],
-  [null, 2, null, null, null, null, null, null, 5, 5, 4, 4, 5, 5, 4, 4],
-  [null, null, null, null, null, null, null, null, 4, 5, 5, 4, 4, 4, 5, 5],
-  [null, null, 2, 1, null, null, 1, null, 5, 4, 5, 5, 5, null, 5, null],
-  [null, null, null, null, 2, null, null, null, 4, null, 5, 5, null, 5, 4, 4],
-  [5, 5, null, null, null, null, 4, null, null, null, 1, 1, 1, 1, 1, 1],
-  [3, 4, 4, 3, null, 4, null, 4, 3, null, 4, null, 5, 4, 5, 4],
-];
-
 let targetUserIndex = 9;
-const factorOptions = [1, 2, 3, 4, 5];
+const factorOptions = [1, 2, 3, 4, 5, 6];
 function getInitialFactorCount() {
   const requested = Number(new URLSearchParams(window.location.search).get("k"));
   return factorOptions.includes(requested) ? requested : 2;
@@ -50,6 +7,7 @@ function getInitialFactorCount() {
 
 let factorCount = getInitialFactorCount();
 const energyTargetCount = 5;
+const enoughFactorCount = 6;
 const focusUserIndices = [0, 1, 4, 6, 9];
 const focusMovieIndices = [0, 1, 2, 3, 4, 5, 7, 10, 11];
 const baselineExample = { row: 9, column: 0 };
@@ -86,191 +44,15 @@ const els = {
 
 const sparseStepIndex = 2;
 
-function mean(values) {
-  const known = values.filter((value) => value !== null && Number.isFinite(value));
-  if (!known.length) return null;
-  return known.reduce((sum, value) => sum + value, 0) / known.length;
-}
-
-function transpose(matrix) {
-  return matrix[0].map((_, columnIndex) => matrix.map((row) => row[columnIndex]));
-}
-
-function multiply(a, b) {
-  const bT = transpose(b);
-  return a.map((row) =>
-    bT.map((column) => row.reduce((sum, value, index) => sum + value * column[index], 0))
-  );
-}
-
-function matrixVectorMultiply(matrix, vector) {
-  return matrix.map((row) => row.reduce((sum, value, index) => sum + value * vector[index], 0));
-}
-
-function identity(size) {
-  return Array.from({ length: size }, (_, row) =>
-    Array.from({ length: size }, (_, column) => (row === column ? 1 : 0))
-  );
-}
-
-function jacobiEigenDecomposition(symmetricMatrix, maxIterations = 120, tolerance = 1e-10) {
-  const size = symmetricMatrix.length;
-  const a = symmetricMatrix.map((row) => [...row]);
-  const eigenvectors = identity(size);
-
-  for (let iteration = 0; iteration < maxIterations; iteration += 1) {
-    let p = 0;
-    let q = 1;
-    let largest = Math.abs(a[p][q]);
-
-    for (let row = 0; row < size; row += 1) {
-      for (let column = row + 1; column < size; column += 1) {
-        const value = Math.abs(a[row][column]);
-        if (value > largest) {
-          largest = value;
-          p = row;
-          q = column;
-        }
-      }
-    }
-
-    if (largest < tolerance) break;
-
-    const theta = (a[q][q] - a[p][p]) / (2 * a[p][q]);
-    const sign = theta >= 0 ? 1 : -1;
-    const t = sign / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
-    const c = 1 / Math.sqrt(t * t + 1);
-    const s = t * c;
-
-    const app = a[p][p];
-    const aqq = a[q][q];
-    const apq = a[p][q];
-
-    a[p][p] = c * c * app - 2 * s * c * apq + s * s * aqq;
-    a[q][q] = s * s * app + 2 * s * c * apq + c * c * aqq;
-    a[p][q] = 0;
-    a[q][p] = 0;
-
-    for (let k = 0; k < size; k += 1) {
-      if (k !== p && k !== q) {
-        const akp = a[k][p];
-        const akq = a[k][q];
-        a[k][p] = c * akp - s * akq;
-        a[p][k] = a[k][p];
-        a[k][q] = s * akp + c * akq;
-        a[q][k] = a[k][q];
-      }
-
-      const vkp = eigenvectors[k][p];
-      const vkq = eigenvectors[k][q];
-      eigenvectors[k][p] = c * vkp - s * vkq;
-      eigenvectors[k][q] = s * vkp + c * vkq;
-    }
-  }
-
-  const pairs = a
-    .map((row, index) => ({
-      value: Math.max(0, row[index]),
-      vector: eigenvectors.map((vectorRow) => vectorRow[index]),
-    }))
-    .sort((left, right) => right.value - left.value);
-
-  return pairs;
-}
-
 function computeModel() {
-  const flattenedKnownRatings = ratings.flat().filter((value) => value !== null);
-  const globalAverage = mean(flattenedKnownRatings);
-  const movieAverages = movies.map((_, columnIndex) => {
-    const columnValues = ratings.map((row) => row[columnIndex]);
-    return mean(columnValues) ?? globalAverage;
+  return computeSvdRecommendationModel({
+    ratings,
+    movies,
+    factorCount,
+    targetUserIndex,
+    energyTargetCount,
+    enoughFactorCount,
   });
-
-  const residualMatrix = ratings.map((row, rowIndex) =>
-    row.map((rating, columnIndex) =>
-      rating === null ? 0 : rating - movieAverages[columnIndex]
-    )
-  );
-
-  const sparseEntries = [];
-  ratings.forEach((row, rowIndex) => {
-    row.forEach((rating, columnIndex) => {
-      if (rating !== null) {
-        sparseEntries.push({
-          row: rowIndex,
-          column: columnIndex,
-          rating,
-          residual: rating - movieAverages[columnIndex],
-        });
-      }
-    });
-  });
-
-  const residualT = transpose(residualMatrix);
-  const covariance = multiply(residualT, residualMatrix);
-  const allEigenPairs = jacobiEigenDecomposition(covariance);
-  const totalEnergy = allEigenPairs.reduce((sum, pair) => sum + pair.value, 0);
-  const componentEnergy = allEigenPairs.map((pair, index) => {
-    const cumulativeEnergy = allEigenPairs
-      .slice(0, index + 1)
-      .reduce((sum, item) => sum + item.value, 0);
-
-    return {
-      component: index + 1,
-      singularValue: Math.sqrt(pair.value),
-      energy: pair.value,
-      cumulativeEnergy,
-      cumulativeShare: totalEnergy ? cumulativeEnergy / totalEnergy : 0,
-      kept: index < factorCount,
-      target: index + 1 === energyTargetCount,
-    };
-  });
-  const eigenPairs = allEigenPairs.slice(0, factorCount);
-  const singularValues = eigenPairs.map((pair) => Math.sqrt(pair.value));
-  const components = eigenPairs.map((pair) => pair.vector);
-  const componentColumns = transpose(components);
-
-  const userFactors = residualMatrix.map((row) =>
-    components.map((component) => row.reduce((sum, value, index) => sum + value * component[index], 0))
-  );
-
-  const predictedResiduals = userFactors.map((factorRow) =>
-    componentColumns.map((componentColumn) =>
-      factorRow.reduce((sum, value, index) => sum + value * componentColumn[index], 0)
-    )
-  );
-
-  const predictedRatings = predictedResiduals.map((row, rowIndex) =>
-    row.map((residual, columnIndex) =>
-      Math.min(5, Math.max(1, residual + movieAverages[columnIndex]))
-    )
-  );
-
-  const recommendations = predictedRatings[targetUserIndex]
-    .map((score, columnIndex) => ({
-      movie: movies[columnIndex],
-      score,
-      rated: ratings[targetUserIndex][columnIndex] !== null,
-    }))
-    .filter((item) => !item.rated)
-    .sort((left, right) => right.score - left.score);
-
-  return {
-    globalAverage,
-    movieAverages,
-    residualMatrix,
-    sparseEntries,
-    covariance,
-    singularValues,
-    allSingularValues: allEigenPairs.map((pair) => Math.sqrt(pair.value)),
-    totalEnergy,
-    componentEnergy,
-    components,
-    userFactors,
-    movieFactors: components,
-    predictedRatings,
-    recommendations,
-  };
 }
 
 let model = computeModel();
@@ -631,6 +413,72 @@ function hiddenFactorsPreviewHTML() {
   `;
 }
 
+function factorCalculationHTML() {
+  const topRows = model.componentEnergy.slice(0, Math.min(enoughFactorCount, model.componentEnergy.length));
+  const formulaRows = topRows
+    .map(
+      (item) => `
+        <div class="factor-source-row${item.component <= factorCount ? " is-kept" : ""}">
+          <span>Factor ${item.component}</span>
+          <strong>${format(item.singularValue, 2)}</strong>
+          <em>${format(item.energy, 2)}</em>
+          <b>${format(item.cumulativeShare * 100, 1)}%</b>
+        </div>
+      `
+    )
+    .join("");
+
+  return `
+    <div class="factor-source-scene">
+      <div class="factor-source-panel">
+        <div class="matrix-title">
+          <strong>How one factor is found</strong>
+          ${sourcePillHTML({
+            label: "source A",
+            title: "A is the residual matrix",
+            body: residualMatrixPreviewHTML(),
+          })}
+        </div>
+        <div class="factor-flow">
+          <div>
+            <span>1</span>
+            <strong>Start from A</strong>
+            <p>A is the sparse residual matrix: known rating minus movie average.</p>
+          </div>
+          <div>
+            <span>2</span>
+            <strong>Build A<sup>T</sup>A</strong>
+            <p>This compares movie columns with movie columns, so similar rating-deviation patterns line up.</p>
+          </div>
+          <div>
+            <span>3</span>
+            <strong>Find eigenvectors</strong>
+            <p>Each eigenvector becomes a hidden movie direction. The biggest eigenvalue gives the strongest direction.</p>
+          </div>
+          <div>
+            <span>4</span>
+            <strong>Take square roots</strong>
+            <p>The singular value is sqrt(eigenvalue). Bigger singular values explain more of A.</p>
+          </div>
+        </div>
+      </div>
+      <div class="factor-source-panel">
+        <div class="matrix-title">
+          <strong>Ranked factor strength</strong>
+          <span>energy = singular value squared</span>
+        </div>
+        <div class="factor-source-table">
+          <span>Factor</span>
+          <span>Singular value</span>
+          <span>Energy</span>
+          <span>Cumulative</span>
+          ${formulaRows}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function factorCoordinateRowsHTML({ values, description }) {
   return `
     <div class="factor-coordinate-rows">
@@ -701,17 +549,18 @@ function sparseMapHTML({ focused = false } = {}) {
 function hiddenAxesHTML() {
   const chosenEnergy = model.componentEnergy[factorCount - 1];
   const targetEnergy = model.componentEnergy[energyTargetCount - 1];
+  const enoughEnergy = model.componentEnergy[enoughFactorCount - 1];
   const targetSentence =
     factorCount === energyTargetCount
       ? `This reaches the report-style 80%-90% target for the larger demo dataset.`
       : `For the report-style 80%-90% target on this larger dataset, k = ${energyTargetCount} preserves ${format(targetEnergy.cumulativeShare * 100, 1)}%.`;
   const energyRows = model.componentEnergy
-    .slice(0, Math.min(energyTargetCount, model.componentEnergy.length))
+    .slice(0, Math.min(enoughFactorCount, model.componentEnergy.length))
     .map((item) => {
       const width = `${item.cumulativeShare * 100}%`;
-      const label = item.kept ? "shown in demo" : item.target ? "80-90 target" : "extra detail";
+      const label = item.kept ? "shown in demo" : item.target ? "target reached" : item.comparison ? "small gain" : "extra detail";
       return `
-        <div class="energy-row${item.kept ? " is-kept" : ""}${item.target ? " is-target" : ""}">
+        <div class="energy-row${item.kept ? " is-kept" : ""}${item.target ? " is-target" : ""}${item.comparison ? " is-comparison" : ""}">
           <span>k = ${item.component}</span>
           <strong>${format(item.cumulativeShare * 100, 1)}%</strong>
           <em>${label}</em>
@@ -758,7 +607,7 @@ function hiddenAxesHTML() {
         </div>
         <p>Like the report, the demo chooses k by energy: square each singular value, add the strongest ones, and compare how much of the total information is preserved.</p>
         <div class="energy-list">${energyRows}</div>
-        <p>The current demo is using k = ${factorCount}, preserving ${format(chosenEnergy.cumulativeShare * 100, 1)}% of the residual energy. ${targetSentence}</p>
+        <p>The current demo is using k = ${factorCount}, preserving ${format(chosenEnergy.cumulativeShare * 100, 1)}% of the residual energy. ${targetSentence} k = ${enoughFactorCount} preserves ${format(enoughEnergy.cumulativeShare * 100, 1)}%, so it adds only ${format((enoughEnergy.cumulativeShare - targetEnergy.cumulativeShare) * 100, 1)} percentage points after k = ${energyTargetCount}.</p>
       </div>
       <div class="axis-list">${bars}</div>
     </div>
@@ -1091,10 +940,18 @@ const steps = [
   {
     tab: "Hidden Axes",
     title: "Choose k by preserved energy",
-    text: "Use the k buttons at the top to choose how many hidden factors SVD keeps. The energy table updates with the current choice; on this larger demo matrix, k = 5 is the 80%-90% choice.",
+    text: "Use the k buttons at the top to choose how many hidden factors SVD keeps. The energy table updates with the current choice; k = 5 reaches the target, and k = 6 shows the extra gain is small.",
     inspectorTitle: "Why show k = 5",
-    inspectorText: "The top control changes the actual calculation, including user coordinates, movie coordinates, dot products, predictions, and recommendations.",
+    inspectorText: "The top control changes the actual calculation. k = 6 is included so you can compare it against k = 5 and see that the added factor gives only a small improvement.",
     render: hiddenAxesHTML,
+  },
+  {
+    tab: "Factor Math",
+    title: "How factors are calculated",
+    text: "SVD does not guess factor names. It builds directions from the residual matrix using A transposed times A, eigenvectors, and singular values.",
+    inspectorTitle: "Factor source",
+    inspectorText: "Eigenvectors give the hidden directions. Singular values rank those directions by strength. Keeping the first k directions gives the low-rank approximation.",
+    render: factorCalculationHTML,
   },
   {
     tab: "User Coords",
