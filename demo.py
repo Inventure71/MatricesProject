@@ -42,7 +42,7 @@ MOVIES = [
 ]
 
 TARGET_USER = "User 10"
-N_COMPONENTS = 2
+N_COMPONENTS = 5
 
 
 def build_ratings_table():

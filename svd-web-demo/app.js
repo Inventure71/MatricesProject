@@ -552,8 +552,8 @@ function hiddenAxesHTML() {
   const enoughEnergy = model.componentEnergy[enoughFactorCount - 1];
   const targetSentence =
     factorCount === energyTargetCount
-      ? `This reaches the report-style 80%-90% target for the larger demo dataset.`
-      : `For the report-style 80%-90% target on this larger dataset, k = ${energyTargetCount} preserves ${format(targetEnergy.cumulativeShare * 100, 1)}%.`;
+      ? `This is the report-style choice closest to the 80%-90% target for the larger demo dataset.`
+      : `For the report-style target range on this larger dataset, k = ${energyTargetCount} is the closest clear choice and preserves ${format(targetEnergy.cumulativeShare * 100, 1)}%.`;
   const energyRows = model.componentEnergy
     .slice(0, Math.min(enoughFactorCount, model.componentEnergy.length))
     .map((item) => {
@@ -594,7 +594,7 @@ function hiddenAxesHTML() {
             body: residualMatrixPreviewHTML(),
           })}
         </div>
-        <p>The input is not raw star ratings. It is the residual matrix: known rating minus movie average, with missing values behaving as 0*.</p>
+        <p>The input is not raw star ratings. It is the residual matrix: known rating minus movie average. In this demo matrix, missing entries are left unstored and behave like 0* residuals during the calculation.</p>
       </div>
       <div class="origin-panel">
         <div class="matrix-title">
@@ -605,7 +605,7 @@ function hiddenAxesHTML() {
             body: hiddenFactorsPreviewHTML(),
           })}
         </div>
-        <p>Like the report, the demo chooses k by energy: square each singular value, add the strongest ones, and compare how much of the total information is preserved.</p>
+        <p>Like the report, the demo chooses k by energy: square each singular value, add the strongest ones, and compare how much of the residual pattern is preserved.</p>
         <div class="energy-list">${energyRows}</div>
         <p>The current demo is using k = ${factorCount}, preserving ${format(chosenEnergy.cumulativeShare * 100, 1)}% of the residual energy. ${targetSentence} k = ${enoughFactorCount} preserves ${format(enoughEnergy.cumulativeShare * 100, 1)}%, so it adds only ${format((enoughEnergy.cumulativeShare - targetEnergy.cumulativeShare) * 100, 1)} percentage points after k = ${energyTargetCount}.</p>
       </div>
@@ -681,7 +681,7 @@ function movieCoordinatesHTML() {
             body: hiddenFactorsPreviewHTML(),
           })}
         </div>
-        <p>SVD places the movie on the same hidden factors as the users, so the next step can compare matching coordinates.</p>
+        <p>SVD learns movie coordinates from relationships between movie columns in A<sup>T</sup>A. Those coordinates use the same hidden factors as the users, so the next step can compare matching positions.</p>
         ${factorCoordinateRowsHTML({
           values: movieCoordinates,
           description: (index) => `${movies[column]}'s position on hidden factor ${index + 1}`,
@@ -760,7 +760,7 @@ function svdCalculationHTML() {
 
         <div class="dot-intro">
           <strong>The selected k factors are hidden taste axes learned by SVD.</strong>
-          <span>We did not name them as genres. They are compressed patterns from the ratings, and every user and movie gets one coordinate per selected factor.</span>
+          <span>We did not name them as genres. They are compressed patterns from the residual matrix, and every user and movie gets one coordinate per selected factor.</span>
         </div>
 
         <div class="factor-compare-grid">
@@ -912,8 +912,8 @@ const steps = [
   },
   {
     tab: "Average",
-    title: "Compute one movie-average baseline",
-    text: "Before SVD, each movie gets a simple baseline: its average known rating. Then every real rating is replaced by rating minus movie average, so SVD learns what is unusually high or low instead of relearning that some movies are generally rated higher.",
+    title: "Compute each movie-average baseline",
+    text: "Before SVD, each movie gets a simple baseline: its average known rating. Then every real rating is standardized as rating minus movie average, so 0 means normal for that movie instead of badly rated. This lets SVD learn users' preference trends instead of confusing missing or average ratings with dislike.",
     inspectorTitle: "Baseline idea",
     inspectorText: "The movie average is the starting prediction. SVD works on deviations from that start. Blanks stay unknown here; they are not treated as low ratings.",
     render: baselineCalculationHTML,
@@ -921,9 +921,9 @@ const steps = [
   {
     tab: "Residual",
     title: "Build the SVD input matrix",
-    text: "Known ratings become residual numbers representing how much the user liked or disliked the movie compared to the movie average. Missing ratings become implicit zero residuals, shown as 0*, meaning no known deviation from the movie average.",
+    text: "Known ratings become residual numbers representing how much the user liked or disliked the movie compared to the movie average. Missing ratings are shown as 0* because they are unstored entries with no known deviation, not real zero-star ratings.",
     inspectorTitle: "SVD input",
-    inspectorText: "0* is not a rating. It is how the sparse matrix behaves mathematically for unstored entries during TruncatedSVD.",
+    inspectorText: "0* is not a rating. It marks an unstored residual entry in this demo's matrix, so the calculation does not pretend the user gave that movie a low score.",
     render: () =>
       matrixHTML({
         title: "Sparse residual matrix",
@@ -940,9 +940,9 @@ const steps = [
   {
     tab: "Hidden Axes",
     title: "Choose k by preserved energy",
-    text: "Use the k buttons at the top to choose how many hidden factors SVD keeps. The energy table updates with the current choice; k = 5 reaches the target, and k = 6 shows the extra gain is small.",
-    inspectorTitle: "Why show k = 5",
-    inspectorText: "The top control changes the actual calculation. k = 6 is included so you can compare it against k = 5 and see that the added factor gives only a small improvement.",
+    text: "Use the k buttons at the top to choose how many hidden factors SVD keeps. The energy table updates with the current choice; k = 5 is the report-style choice near the 80%-90% target, and k = 6 shows the extra gain is small.",
+    inspectorTitle: "Why compare k = 5 and k = 6",
+    inspectorText: "The top control changes the actual calculation. k = 5 keeps the strongest pattern set near the target range, while k = 6 shows that the next factor adds only a small amount.",
     render: hiddenAxesHTML,
   },
   {
@@ -963,10 +963,10 @@ const steps = [
   },
   {
     tab: "Movie Coords",
-    title: "A movie column becomes coordinates",
-    text: `For ${movies[predictionExample.column]}, SVD turns the movie's residual column into matching coordinates on the same hidden factors.`,
+    title: "A movie gets matching coordinates",
+    text: `For ${movies[predictionExample.column]}, SVD learns movie coordinates from A transposed times A, so the movie can be placed on the same hidden factors as the users.`,
     inspectorTitle: "Movie coordinate source",
-    inspectorText: "A movie's coordinates come from that movie's column in A. Users and movies must use the same axes so their matching coordinates can be multiplied.",
+    inspectorText: "A movie's coordinates come from the hidden directions learned from A transposed times A. Users and movies must use the same axes so their matching coordinates can be multiplied.",
     render: movieCoordinatesHTML,
   },
   {
@@ -974,7 +974,7 @@ const steps = [
     title: "Compare coordinates with a dot product",
     text: "For one blank cell, SVD compares the user's coordinates and the movie's coordinates on the same hidden factors. The result becomes an adjustment to the movie average.",
     inspectorTitle: "Dot product",
-    inspectorText: "A factor is an unnamed rating pattern learned from the data. Matching signs increase the prediction; opposite signs decrease it.",
+    inspectorText: "A factor is an unnamed pattern learned from the residual matrix. Matching signs increase the prediction; opposite signs decrease it.",
     render: svdCalculationHTML,
   },
   {
