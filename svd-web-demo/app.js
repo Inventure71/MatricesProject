@@ -899,20 +899,33 @@ function preferenceMapHTML() {
   const yRange = yMax - yMin || 1;
   const xScale = (value) => mapPadding * 100 + ((value - xMin) / xRange) * (100 - mapPadding * 200);
   const yScale = (value) => 100 - (mapPadding * 100 + ((value - yMin) / yRange) * (100 - mapPadding * 200));
-  const bestRecommendation = model.recommendations[0];
-  const bestRecommendationIndex = bestRecommendation ? movies.indexOf(bestRecommendation.movie) : -1;
   const youPoint = userPoints[targetUserIndex];
-  const bestMoviePoint = moviePoints[bestRecommendationIndex];
+  const youDisplayPoint = { x: xScale(youPoint.x), y: yScale(youPoint.y) };
+  const closestRecommendation = model.recommendations
+    .map((recommendation) => {
+      const movieIndex = movies.indexOf(recommendation.movie);
+      const moviePoint = moviePoints[movieIndex];
+      const endX = xScale(moviePoint.x);
+      const endY = yScale(moviePoint.y);
+      return {
+        recommendation,
+        movieIndex,
+        endX,
+        endY,
+        distance: Math.hypot(youDisplayPoint.x - endX, youDisplayPoint.y - endY),
+      };
+    })
+    .sort((left, right) => left.distance - right.distance)[0];
   const closestLink =
-    bestMoviePoint
+    closestRecommendation
       ? {
-          startX: xScale(youPoint.x),
-          startY: yScale(youPoint.y),
-          endX: xScale(bestMoviePoint.x),
-          endY: yScale(bestMoviePoint.y),
-          movie: bestRecommendation.movie,
-          category: movieCategories[bestRecommendationIndex],
-          score: bestRecommendation.score,
+          startX: youDisplayPoint.x,
+          startY: youDisplayPoint.y,
+          endX: closestRecommendation.endX,
+          endY: closestRecommendation.endY,
+          movie: closestRecommendation.recommendation.movie,
+          category: movieCategories[closestRecommendation.movieIndex],
+          score: closestRecommendation.recommendation.score,
         }
       : null;
   const importantMovieIndices = new Set([
@@ -1002,7 +1015,7 @@ function preferenceMapHTML() {
         </div>
         ${
           closestLink
-            ? `<p class="closest-summary">Best unrated suggestion: <strong>${closestLink.movie}</strong> <span class="rank-category ${categoryClassName(closestLink.category)}">${closestLink.category}</span> at ${format(closestLink.score, 2)}.</p>`
+            ? `<p class="closest-summary">Closest unrated movie on this 2D map: <strong>${closestLink.movie}</strong> <span class="rank-category ${categoryClassName(closestLink.category)}">${closestLink.category}</span>, predicted ${format(closestLink.score, 2)}.</p>`
             : ""
         }
         <p class="map-hint">Drag the map to move around. Scroll or use + to zoom up to 700% into crowded points.</p>

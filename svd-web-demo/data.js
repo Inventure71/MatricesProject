@@ -83,14 +83,14 @@ const movieCategories = [
 ];
 
 let ratings = [
-  [5, 5, 4, 5, 3, null, null, null, 2, null, null, null, 1, null, null, null],
-  [5, 4, 5, 5, null, 3, null, null, null, 2, null, null, null, 1, null, null],
+  [5, 5, 4, 5, 3, null, 4, null, 2, null, null, null, null, null, 1, null],
+  [5, 4, 5, 5, null, 3, 4, null, null, 2, null, null, null, null, 2, null],
   [4, null, null, 3, 5, 5, 4, 5, 2, null, null, null, 1, null, null, null],
-  [null, 3, null, null, 5, 4, 5, 5, null, 1, null, null, null, 2, null, null],
-  [2, null, null, null, 2, null, null, null, 5, 5, 4, 5, 3, null, null, null],
-  [null, 1, null, null, null, 2, null, null, 5, 4, 5, 5, null, 3, null, null],
+  [null, null, null, 4, 5, 4, 5, 5, null, 1, null, null, null, 2, null, 1],
+  [2, null, null, null, 2, null, null, null, 5, 5, 4, 5, 3, null, null, 3],
+  [null, 1, null, null, null, 2, null, 1, 5, 4, 5, 5, null, 3, null, null],
   [1, null, null, null, 2, null, null, null, 3, null, null, null, 5, 5, 4, 5],
-  [null, 2, null, null, null, 1, null, null, null, 3, null, null, 5, 4, 5, 5],
-  [4, 4, null, null, 4, null, null, null, 4, 4, null, null, 4, null, 4, null],
-  [5, 4, 5, null, 4, null, null, 3, null, null, 2, 2, null, null, null, 2],
+  [null, 2, null, null, null, 1, null, null, null, 3, 3, null, 5, 4, 5, 5],
+  [4, null, 4, null, 4, null, null, 4, 4, null, null, 4, 4, null, 4, null],
+  [5, 4, 5, null, 4, null, null, null, null, null, 2, 2, 2, 2, null, null],
 ];
