@@ -5,3 +5,4 @@ __pycache__/
 tmp/
 Docs/
 .playwright-mcp/
+svd-web-demo/tests/
