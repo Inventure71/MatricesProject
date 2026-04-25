@@ -4,3 +4,4 @@ Matrices_Project.pdf
 __pycache__/
 tmp/
 Docs/
+.playwright-mcp/

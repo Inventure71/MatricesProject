@@ -414,7 +414,7 @@ function hiddenFactorsPreviewHTML() {
 }
 
 function factorCalculationHTML() {
-  const topRows = model.componentEnergy.slice(0, Math.min(enoughFactorCount, model.componentEnergy.length));
+  const topRows = model.componentEnergy.slice(0, factorCount);
   const formulaRows = topRows
     .map(
       (item) => `
@@ -558,9 +558,15 @@ function hiddenAxesHTML() {
     .slice(0, Math.min(enoughFactorCount, model.componentEnergy.length))
     .map((item) => {
       const width = `${item.cumulativeShare * 100}%`;
-      const label = item.kept ? "shown in demo" : item.target ? "target reached" : item.comparison ? "small gain" : "extra detail";
+      const label = item.target
+        ? "target"
+        : item.component === energyTargetCount - 1
+          ? "some loss"
+          : item.comparison
+            ? "small gain"
+            : "";
       return `
-        <div class="energy-row${item.kept ? " is-kept" : ""}${item.target ? " is-target" : ""}${item.comparison ? " is-comparison" : ""}">
+        <div class="energy-row${item.kept ? " is-kept" : ""}${item.target ? " is-target" : ""}${item.component === energyTargetCount - 1 ? " is-before-target" : ""}${item.comparison ? " is-comparison" : ""}">
           <span>k = ${item.component}</span>
           <strong>${format(item.cumulativeShare * 100, 1)}%</strong>
           <em>${label}</em>
@@ -624,13 +630,13 @@ function userCoordinatesHTML() {
       <div class="origin-panel">
         <div class="matrix-title">
           <strong>${users[row]}'s residual row</strong>
-          ${sourcePillHTML({
-            label: "row from A",
-            title: `${users[row]}'s visible residuals`,
-            body: residualVectorPreviewHTML({ axis: "row", index: row }),
-          })}
+          <span>row from A</span>
         </div>
         <p>This row is the source. It says how ${users[row]}'s known ratings differ from each movie's average.</p>
+        <div class="inline-source-preview">
+          <strong>${users[row]}'s visible residuals</strong>
+          ${residualVectorPreviewHTML({ axis: "row", index: row })}
+        </div>
       </div>
       <div class="coordinate-arrow">=</div>
       <div class="origin-panel">
@@ -663,13 +669,13 @@ function movieCoordinatesHTML() {
       <div class="origin-panel">
         <div class="matrix-title">
           <strong>${movies[column]}'s residual column</strong>
-          ${sourcePillHTML({
-            label: "column from A",
-            title: `${movies[column]}'s visible residuals`,
-            body: residualVectorPreviewHTML({ axis: "column", index: column }),
-          })}
+          <span>column from A</span>
         </div>
         <p>This column is the source. It says which users rated ${movies[column]} above or below that movie's average.</p>
+        <div class="inline-source-preview">
+          <strong>${movies[column]}'s visible residuals</strong>
+          ${residualVectorPreviewHTML({ axis: "column", index: column })}
+        </div>
       </div>
       <div class="coordinate-arrow">=</div>
       <div class="origin-panel">
