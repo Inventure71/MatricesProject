@@ -11,8 +11,39 @@ const enoughFactorCount = 6;
 const focusUserIndices = [0, 1, 4, 6, 9];
 const focusMovieIndices = [0, 1, 2, 3, 4, 5, 7, 10, 11];
 const baselineExample = { row: 9, column: 0 };
-const predictionExample = { row: 9, column: 4 };
+const predictionExample = { row: 9, column: 5 };
 const defaultTargetRatings = [...ratings[targetUserIndex]];
+
+function categoryClassName(category) {
+  return `category-${category.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+}
+
+function movieHeaderHTML(movieIndex) {
+  const category = movieCategories[movieIndex];
+  return `
+    <div class="cell movie-header ${categoryClassName(category)}">
+      <span>
+        <b>${category}</b>
+        <em>${movies[movieIndex]}</em>
+      </span>
+    </div>
+  `;
+}
+
+function userHeaderHTML(rowIndex, isTargetRow) {
+  const classNames = ["cell", "user-header"];
+  if (isTargetRow) classNames.push("target-user-cell", "target-user-header");
+
+  return `
+    <div class="${classNames.join(" ")}">
+      <span>
+        <b>${users[rowIndex]}</b>
+        <em>${userSegments[rowIndex]}</em>
+      </span>
+    </div>
+  `;
+}
+const mapView = { scale: 1, x: 0, y: 0 };
 
 function targetLastUserIndices() {
   return users.map((_, index) => index).filter((index) => index !== targetUserIndex).concat(targetUserIndex);
@@ -113,7 +144,7 @@ function matrixHTML({
 
   const header = [
     `<div class="cell"><span></span></div>`,
-    ...movieIndices.map((movieIndex) => `<div class="cell"><span>${movies[movieIndex]}</span></div>`),
+    ...movieIndices.map((movieIndex) => movieHeaderHTML(movieIndex)),
   ].join("");
 
   const body = values
@@ -121,16 +152,14 @@ function matrixHTML({
     .map((row, filteredRowIndex) => {
       const rowIndex = rowIndices[filteredRowIndex];
       const isTargetRow = highlightTargetRow && rowIndex === targetUserIndex;
-      const rowHeaderClassNames = ["cell"];
-      if (isTargetRow) rowHeaderClassNames.push("target-user-cell", "target-user-header");
-      const rowHeader = `<div class="${rowHeaderClassNames.join(" ")}"><span>${users[rowIndex]}</span></div>`;
+      const rowHeader = userHeaderHTML(rowIndex, isTargetRow);
       const cells = movieIndices
         .map((columnIndex) => {
           const value = row[columnIndex];
           const isMissing = ratings[rowIndex][columnIndex] === null;
           const isRecommendation =
             highlightMissingForUser && rowIndex === targetUserIndex && isMissing;
-          const classNames = ["cell"];
+          const classNames = ["cell", categoryClassName(movieCategories[columnIndex])];
           if (isTargetRow) classNames.push("target-user-cell");
           let text = "";
           let style = "";
@@ -290,6 +319,98 @@ function resetTargetRatings() {
   renderStep(currentStep);
 }
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function updateMapView(nextView) {
+  mapView.scale = clamp(nextView.scale ?? mapView.scale, 0.65, 7);
+  mapView.x = clamp(nextView.x ?? mapView.x, -900, 900);
+  mapView.y = clamp(nextView.y ?? mapView.y, -680, 680);
+}
+
+function applyMapView(mapElement) {
+  if (!mapElement) return;
+  const zoomValue = mapElement.closest(".preference-map-scene")?.querySelector("[data-map-zoom-value]");
+  const centerX = mapElement.clientWidth / 2;
+  const centerY = mapElement.clientHeight / 2;
+
+  mapElement.querySelectorAll("[data-map-base-x]").forEach((element) => {
+    const baseX = (Number(element.dataset.mapBaseX) / 100) * mapElement.clientWidth;
+    const baseY = (Number(element.dataset.mapBaseY) / 100) * mapElement.clientHeight;
+    const x = centerX + (baseX - centerX) * mapView.scale + mapView.x;
+    const y = centerY + (baseY - centerY) * mapView.scale + mapView.y;
+    element.style.left = `${x}px`;
+    element.style.top = `${y}px`;
+  });
+
+  mapElement.style.setProperty("--map-scale", mapView.scale);
+  mapElement.style.setProperty("--map-pan-x", `${mapView.x}px`);
+  mapElement.style.setProperty("--map-pan-y", `${mapView.y}px`);
+  if (zoomValue) zoomValue.textContent = `${Math.round(mapView.scale * 100)}%`;
+}
+
+function bindPreferenceMap() {
+  const mapElement = els.visualPlane.querySelector(".preference-map");
+  if (!mapElement) return;
+
+  applyMapView(mapElement);
+
+  els.visualPlane.querySelectorAll("[data-map-zoom]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const action = button.dataset.mapZoom;
+      if (action === "reset") {
+        updateMapView({ scale: 1, x: 0, y: 0 });
+      } else {
+        const direction = action === "in" ? 1 : -1;
+        updateMapView({ scale: mapView.scale + direction * 0.5 });
+      }
+      applyMapView(mapElement);
+    });
+  });
+
+  mapElement.addEventListener(
+    "wheel",
+    (event) => {
+      event.preventDefault();
+      const direction = event.deltaY < 0 ? 1 : -1;
+      updateMapView({ scale: mapView.scale + direction * 0.28 });
+      applyMapView(mapElement);
+    },
+    { passive: false }
+  );
+
+  let dragStart = null;
+  mapElement.addEventListener("pointerdown", (event) => {
+    dragStart = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      viewX: mapView.x,
+      viewY: mapView.y,
+    };
+    mapElement.classList.add("is-dragging");
+    mapElement.setPointerCapture(event.pointerId);
+  });
+
+  mapElement.addEventListener("pointermove", (event) => {
+    if (!dragStart || event.pointerId !== dragStart.pointerId) return;
+    updateMapView({
+      x: dragStart.viewX + event.clientX - dragStart.x,
+      y: dragStart.viewY + event.clientY - dragStart.y,
+    });
+    applyMapView(mapElement);
+  });
+
+  const stopDragging = (event) => {
+    if (!dragStart || event.pointerId !== dragStart.pointerId) return;
+    dragStart = null;
+    mapElement.classList.remove("is-dragging");
+  };
+  mapElement.addEventListener("pointerup", stopDragging);
+  mapElement.addEventListener("pointercancel", stopDragging);
+}
+
 function bindRatingEditor() {
   els.visualPlane.querySelectorAll("[data-rating-value]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -311,6 +432,15 @@ function bindRatingEditor() {
       resetTargetRatings();
     });
   });
+
+  els.visualPlane.querySelectorAll("[data-map-k]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setPlaying(false);
+      setFactorCount(Number(button.dataset.mapK));
+    });
+  });
+
+  bindPreferenceMap();
 }
 
 function infoPreviewHTML({ label, title, body }) {
@@ -698,6 +828,150 @@ function movieCoordinatesHTML() {
   `;
 }
 
+function preferenceMapHTML() {
+  if (factorCount !== 2) {
+    return `
+      <div class="map-switch-scene">
+        <div>
+          <strong>2D view needs exactly two factors</strong>
+          <p>The map uses x = hidden factor 1 and y = hidden factor 2. You are currently using k = ${factorCount}, so the model lives in ${factorCount} dimensions.</p>
+        </div>
+        <button class="primary-button map-switch-button" type="button" data-map-k="2">Switch to k = 2</button>
+      </div>
+    `;
+  }
+
+  const userPoints = users.map((user, rowIndex) => ({
+    type: "user",
+    label: user,
+    segment: userSegments[rowIndex],
+    x: model.userFactors[rowIndex][0],
+    y: model.userFactors[rowIndex][1],
+    target: rowIndex === targetUserIndex,
+  }));
+  const moviePoints = movies.map((movie, columnIndex) => ({
+    type: "movie",
+    label: movie,
+    category: movieCategories[columnIndex],
+    x: model.movieFactors[0][columnIndex],
+    y: model.movieFactors[1][columnIndex],
+    target: columnIndex === predictionExample.column,
+    columnIndex,
+  }));
+  const points = [...userPoints, ...moviePoints];
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const xMin = Math.min(...xs);
+  const xMax = Math.max(...xs);
+  const yMin = Math.min(...ys);
+  const yMax = Math.max(...ys);
+  const mapPadding = 0.12;
+  const xRange = xMax - xMin || 1;
+  const yRange = yMax - yMin || 1;
+  const xScale = (value) => mapPadding * 100 + ((value - xMin) / xRange) * (100 - mapPadding * 200);
+  const yScale = (value) => 100 - (mapPadding * 100 + ((value - yMin) / yRange) * (100 - mapPadding * 200));
+  const importantMovieIndices = new Set([
+    predictionExample.column,
+    ...model.recommendations.slice(0, 3).map((item) => movies.indexOf(item.movie)),
+  ]);
+
+  const pointHTML = points
+    .map((point) => {
+      const baseX = xScale(point.x);
+      const baseY = yScale(point.y);
+      const shouldLabel =
+        point.type === "user" ||
+        point.target ||
+        point.type === "movie" ||
+        (point.type === "movie" && importantMovieIndices.has(point.columnIndex));
+      const categoryClass =
+        point.type === "movie" ? ` ${categoryClassName(point.category)}` : "";
+      const title =
+        point.type === "movie"
+          ? `${point.label} (${point.category}): (${format(point.x, 2)}, ${format(point.y, 2)})`
+          : `${point.label} (${point.segment}): (${format(point.x, 2)}, ${format(point.y, 2)})`;
+      const labelHTML =
+        point.type === "movie"
+          ? `<em><b>${point.label}</b><small>${point.category}</small></em>`
+          : `<em><b>${point.label}</b><small>${point.segment}</small></em>`;
+      return `
+        <span
+          class="map-point ${point.type}${categoryClass}${point.target ? " is-target" : ""}"
+          style="--x:${baseX}%;--y:${baseY}%;"
+          data-map-base-x="${baseX}"
+          data-map-base-y="${baseY}"
+          title="${title}"
+        >
+          ${shouldLabel ? labelHTML : ""}
+        </span>
+      `;
+    })
+    .join("");
+  const userGuide = users
+    .map(
+      (user, index) => `
+        <div class="map-user-row${index === targetUserIndex ? " is-you" : ""}">
+          <strong>${user}</strong>
+          <span>${userSegments[index]}</span>
+          <em>${userDescriptions[index]}</em>
+        </div>
+      `
+    )
+    .join("");
+  const categoryGuide = Object.entries(categoryDescriptions)
+    .map(
+      ([category, description]) => `
+        <div class="map-category-row ${categoryClassName(category)}">
+          <b></b>
+          <strong>${category}</strong>
+          <span>${description}</span>
+        </div>
+      `
+    )
+    .join("");
+
+  return `
+    <div class="preference-map-scene">
+      <div class="map-explainer">
+        <strong>Hidden preference space</strong>
+        <p>With k = 2, each user and movie has two learned coordinates. Category colors explain the movie labels; point positions still come from SVD.</p>
+        <div class="map-legend">
+          <span><b class="legend-user"></b> Users</span>
+          <span><b class="legend-movie category-sci-fi"></b> Sci-Fi</span>
+          <span><b class="legend-movie category-action"></b> Action</span>
+          <span><b class="legend-movie category-comedy"></b> Comedy</span>
+          <span><b class="legend-movie category-romance"></b> Romance</span>
+          <span><b class="legend-you"></b> You</span>
+        </div>
+        <div class="map-toolbar" aria-label="Map controls">
+          <button type="button" data-map-zoom="out" aria-label="Zoom out">-</button>
+          <strong data-map-zoom-value>100%</strong>
+          <button type="button" data-map-zoom="in" aria-label="Zoom in">+</button>
+          <button type="button" data-map-zoom="reset">Reset</button>
+        </div>
+        <p class="map-hint">Drag the map to move around. Scroll or use + to zoom up to 700% into crowded points.</p>
+        <div class="map-guide">
+          <strong>User profiles</strong>
+          ${userGuide}
+        </div>
+        <div class="map-guide">
+          <strong>Movie columns</strong>
+          ${categoryGuide}
+        </div>
+      </div>
+      <div class="preference-map" aria-label="2D hidden preference map">
+        <div class="map-layer">
+          <span class="map-axis x-axis"></span>
+          <span class="map-axis y-axis"></span>
+          <span class="axis-label x-label">Hidden factor 1</span>
+          <span class="axis-label y-label">Hidden factor 2</span>
+        </div>
+        ${pointHTML}
+      </div>
+    </div>
+  `;
+}
+
 function baselineCalculationHTML() {
   const { row, column } = baselineExample;
   const knownColumnRatings = ratings
@@ -974,6 +1248,14 @@ const steps = [
     inspectorTitle: "Movie coordinate source",
     inspectorText: "A movie's coordinates come from the hidden directions learned from A transposed times A. Users and movies must use the same axes so their matching coordinates can be multiplied.",
     render: movieCoordinatesHTML,
+  },
+  {
+    tab: "2D Map",
+    title: "See the hidden preference map",
+    text: "When k = 2, the first hidden factor becomes the x-axis and the second hidden factor becomes the y-axis. This lets us draw users and movies as points in the same learned preference space.",
+    inspectorTitle: "Why only k = 2",
+    inspectorText: "A normal x-y graph can only show two dimensions. Larger k values still work for prediction, but they need more dimensions than a simple flat map can show.",
+    render: preferenceMapHTML,
   },
   {
     tab: "Dot Product",
