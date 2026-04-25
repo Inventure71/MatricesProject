@@ -562,10 +562,38 @@ h3 {
 }
 
 .rating-movie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   color: var(--ink);
   font-size: 13px;
   font-weight: 780;
   overflow-wrap: anywhere;
+}
+
+.rating-category-tag,
+.rank-category {
+  display: inline-flex;
+  align-items: center;
+  min-width: max-content;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--category-color) 14%, white);
+  color: var(--category-color);
+  font-size: 10px;
+  font-weight: 860;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.rating-category-tag {
+  padding: 4px 7px;
+}
+
+.rank-category {
+  margin-left: 7px;
+  padding: 4px 6px;
+  vertical-align: middle;
 }
 
 .rating-options {
@@ -1060,9 +1088,10 @@ h3 {
 }
 
 .map-toolbar {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
   padding-top: 4px;
 }
 
@@ -1089,6 +1118,28 @@ h3 {
   color: var(--muted);
   font-size: 12px;
   text-align: center;
+}
+
+.closest-button {
+  width: auto !important;
+  padding: 0 12px;
+  color: var(--accent-strong) !important;
+}
+
+.closest-button.is-active {
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+  color: white !important;
+}
+
+.closest-summary {
+  max-width: 420px;
+  padding: 8px 10px;
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  border-radius: 6px;
+  background: rgba(15, 118, 110, 0.07);
+  color: var(--muted);
+  font-size: 12px !important;
 }
 
 .map-hint {
@@ -1174,6 +1225,30 @@ h3 {
   cursor: grab;
   touch-action: none;
   user-select: none;
+}
+
+.closest-link-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.closest-link-layer.is-visible,
+.preference-map.is-showing-closest .closest-link-layer {
+  opacity: 1;
+}
+
+.closest-link-layer line {
+  stroke: var(--accent-strong);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 8 7;
+  filter: drop-shadow(0 2px 4px rgba(15, 118, 110, 0.24));
 }
 
 .preference-map.is-dragging {

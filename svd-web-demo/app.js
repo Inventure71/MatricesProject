@@ -44,6 +44,7 @@ function userHeaderHTML(rowIndex, isTargetRow) {
   `;
 }
 const mapView = { scale: 1, x: 0, y: 0 };
+let showClosestUnwatchedMovie = false;
 
 function targetLastUserIndices() {
   return users.map((_, index) => index).filter((index) => index !== targetUserIndex).concat(targetUserIndex);
@@ -226,10 +227,14 @@ function ratingEditorHTML() {
         })
         .join("");
       const isUnrated = currentRating === null;
+      const category = movieCategories[columnIndex];
 
       return `
         <div class="rating-control">
-          <span class="rating-movie">${movie}</span>
+          <span class="rating-movie">
+            <span>${movie}</span>
+            <b class="rating-category-tag ${categoryClassName(category)}">${category}</b>
+          </span>
           <div class="rating-options" aria-label="${movie} rating">
             ${ratingButtons}
             <button
@@ -334,14 +339,28 @@ function applyMapView(mapElement) {
   const zoomValue = mapElement.closest(".preference-map-scene")?.querySelector("[data-map-zoom-value]");
   const centerX = mapElement.clientWidth / 2;
   const centerY = mapElement.clientHeight / 2;
+  const scaledPoint = (basePercentX, basePercentY) => {
+    const baseX = (basePercentX / 100) * mapElement.clientWidth;
+    const baseY = (basePercentY / 100) * mapElement.clientHeight;
+    return {
+      x: centerX + (baseX - centerX) * mapView.scale + mapView.x,
+      y: centerY + (baseY - centerY) * mapView.scale + mapView.y,
+    };
+  };
 
   mapElement.querySelectorAll("[data-map-base-x]").forEach((element) => {
-    const baseX = (Number(element.dataset.mapBaseX) / 100) * mapElement.clientWidth;
-    const baseY = (Number(element.dataset.mapBaseY) / 100) * mapElement.clientHeight;
-    const x = centerX + (baseX - centerX) * mapView.scale + mapView.x;
-    const y = centerY + (baseY - centerY) * mapView.scale + mapView.y;
-    element.style.left = `${x}px`;
-    element.style.top = `${y}px`;
+    const point = scaledPoint(Number(element.dataset.mapBaseX), Number(element.dataset.mapBaseY));
+    element.style.left = `${point.x}px`;
+    element.style.top = `${point.y}px`;
+  });
+
+  mapElement.querySelectorAll("[data-closest-link]").forEach((line) => {
+    const start = scaledPoint(Number(line.dataset.startX), Number(line.dataset.startY));
+    const end = scaledPoint(Number(line.dataset.endX), Number(line.dataset.endY));
+    line.setAttribute("x1", String(start.x));
+    line.setAttribute("y1", String(start.y));
+    line.setAttribute("x2", String(end.x));
+    line.setAttribute("y2", String(end.y));
   });
 
   mapElement.style.setProperty("--map-scale", mapView.scale);
@@ -365,6 +384,16 @@ function bindPreferenceMap() {
         const direction = action === "in" ? 1 : -1;
         updateMapView({ scale: mapView.scale + direction * 0.5 });
       }
+      applyMapView(mapElement);
+    });
+  });
+
+  els.visualPlane.querySelectorAll("[data-show-closest]").forEach((button) => {
+    button.addEventListener("click", () => {
+      showClosestUnwatchedMovie = !showClosestUnwatchedMovie;
+      button.setAttribute("aria-pressed", String(showClosestUnwatchedMovie));
+      button.classList.toggle("is-active", showClosestUnwatchedMovie);
+      mapElement.classList.toggle("is-showing-closest", showClosestUnwatchedMovie);
       applyMapView(mapElement);
     });
   });
@@ -870,6 +899,22 @@ function preferenceMapHTML() {
   const yRange = yMax - yMin || 1;
   const xScale = (value) => mapPadding * 100 + ((value - xMin) / xRange) * (100 - mapPadding * 200);
   const yScale = (value) => 100 - (mapPadding * 100 + ((value - yMin) / yRange) * (100 - mapPadding * 200));
+  const bestRecommendation = model.recommendations[0];
+  const bestRecommendationIndex = bestRecommendation ? movies.indexOf(bestRecommendation.movie) : -1;
+  const youPoint = userPoints[targetUserIndex];
+  const bestMoviePoint = moviePoints[bestRecommendationIndex];
+  const closestLink =
+    bestMoviePoint
+      ? {
+          startX: xScale(youPoint.x),
+          startY: yScale(youPoint.y),
+          endX: xScale(bestMoviePoint.x),
+          endY: yScale(bestMoviePoint.y),
+          movie: bestRecommendation.movie,
+          category: movieCategories[bestRecommendationIndex],
+          score: bestRecommendation.score,
+        }
+      : null;
   const importantMovieIndices = new Set([
     predictionExample.column,
     ...model.recommendations.slice(0, 3).map((item) => movies.indexOf(item.movie)),
@@ -948,7 +993,18 @@ function preferenceMapHTML() {
           <strong data-map-zoom-value>100%</strong>
           <button type="button" data-map-zoom="in" aria-label="Zoom in">+</button>
           <button type="button" data-map-zoom="reset">Reset</button>
+          <button
+            class="closest-button${showClosestUnwatchedMovie ? " is-active" : ""}"
+            type="button"
+            data-show-closest="true"
+            aria-pressed="${showClosestUnwatchedMovie}"
+          >show closest unwatched movie</button>
         </div>
+        ${
+          closestLink
+            ? `<p class="closest-summary">Best unrated suggestion: <strong>${closestLink.movie}</strong> <span class="rank-category ${categoryClassName(closestLink.category)}">${closestLink.category}</span> at ${format(closestLink.score, 2)}.</p>`
+            : ""
+        }
         <p class="map-hint">Drag the map to move around. Scroll or use + to zoom up to 700% into crowded points.</p>
         <div class="map-guide">
           <strong>User profiles</strong>
@@ -959,7 +1015,20 @@ function preferenceMapHTML() {
           ${categoryGuide}
         </div>
       </div>
-      <div class="preference-map" aria-label="2D hidden preference map">
+      <div class="preference-map${showClosestUnwatchedMovie ? " is-showing-closest" : ""}" aria-label="2D hidden preference map">
+        ${
+          closestLink
+            ? `<svg class="closest-link-layer${showClosestUnwatchedMovie ? " is-visible" : ""}" aria-hidden="true">
+                <line
+                  data-closest-link="true"
+                  data-start-x="${closestLink.startX}"
+                  data-start-y="${closestLink.startY}"
+                  data-end-x="${closestLink.endX}"
+                  data-end-y="${closestLink.endY}"
+                ></line>
+              </svg>`
+            : ""
+        }
         <div class="map-layer">
           <span class="map-axis x-axis"></span>
           <span class="map-axis y-axis"></span>
@@ -1121,10 +1190,15 @@ function recommendationsHTML() {
   const items = model.recommendations
     .map((item, index) => {
       const width = `${(item.score / 5) * 100}%`;
+      const movieIndex = movies.indexOf(item.movie);
+      const category = movieCategories[movieIndex];
       return `
         <div class="rank-item" style="--delay:${index * 120}ms">
           <span class="rank-number">${index + 1}</span>
-          <strong>${item.movie}</strong>
+          <strong>
+            ${item.movie}
+            <b class="rank-category ${categoryClassName(category)}">${category}</b>
+          </strong>
           <span class="rank-score">${format(item.score, 2)}</span>
           <div class="rank-bar"><span style="--w:${width}"></span></div>
         </div>
