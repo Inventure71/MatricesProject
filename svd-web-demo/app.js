@@ -8,8 +8,8 @@ function getInitialFactorCount() {
 let factorCount = getInitialFactorCount();
 const energyTargetCount = 5;
 const enoughFactorCount = 6;
-const focusUserIndices = [0, 1, 4, 6, 9];
-const focusMovieIndices = [0, 1, 2, 3, 4, 5, 7, 10, 11];
+const allUserIndices = users.map((_, index) => index);
+const allMovieIndices = movies.map((_, index) => index);
 const baselineExample = { row: 9, column: 0 };
 const predictionExample = { row: 9, column: 5 };
 const defaultTargetRatings = [...ratings[targetUserIndex]];
@@ -20,11 +20,12 @@ function categoryClassName(category) {
 
 function movieHeaderHTML(movieIndex) {
   const category = movieCategories[movieIndex];
+  const movie = movies[movieIndex];
   return `
     <div class="cell movie-header ${categoryClassName(category)}">
       <span>
         <b>${category}</b>
-        <em>${movies[movieIndex]}</em>
+        <em title="${movie}">${movie}</em>
       </span>
     </div>
   `;
@@ -45,9 +46,10 @@ function userHeaderHTML(rowIndex, isTargetRow) {
 }
 const mapView = { scale: 1, x: 0, y: 0 };
 let showClosestUnwatchedMovie = false;
+let showMovieLabels = true;
 
 function targetLastUserIndices() {
-  return users.map((_, index) => index).filter((index) => index !== targetUserIndex).concat(targetUserIndex);
+  return allUserIndices.filter((index) => index !== targetUserIndex).concat(targetUserIndex);
 }
 
 const els = {
@@ -74,7 +76,7 @@ const els = {
   tabs: [],
 };
 
-const sparseStepIndex = 2;
+const sparseStepIndex = 1;
 
 function computeModel() {
   return computeSvdRecommendationModel({
@@ -129,8 +131,8 @@ function matrixHTML({
   highlightTargetRow = false,
   embedded = false,
   showImplicitZeros = false,
-  rowIndices = users.map((_, index) => index),
-  movieIndices = movies.map((_, index) => index),
+  rowIndices = allUserIndices,
+  movieIndices = allMovieIndices,
 }) {
   const selectedValues = rowIndices.flatMap((rowIndex) =>
     movieIndices.map((columnIndex) => values[rowIndex][columnIndex])
@@ -140,8 +142,8 @@ function matrixHTML({
   const max = Math.max(...flatNumbers);
   const isWideMatrix = movieIndices.length > 12;
   const columns = isWideMatrix
-    ? `66px repeat(${movieIndices.length}, minmax(38px, 1fr))`
-    : `90px repeat(${movieIndices.length}, minmax(72px, 1fr))`;
+    ? `66px repeat(${movieIndices.length}, minmax(58px, 1fr))`
+    : `90px repeat(${movieIndices.length}, minmax(86px, 1fr))`;
 
   const header = [
     `<div class="cell"><span></span></div>`,
@@ -205,6 +207,10 @@ function matrixHTML({
       </div>
     </div>
   `;
+}
+
+function matrixSceneHTML(options) {
+  return `<div class="matrix-scene">${matrixHTML(options)}</div>`;
 }
 
 function ratingEditorHTML() {
@@ -398,6 +404,15 @@ function bindPreferenceMap() {
     });
   });
 
+  els.visualPlane.querySelectorAll("[data-show-movie-labels]").forEach((button) => {
+    button.addEventListener("click", () => {
+      showMovieLabels = !showMovieLabels;
+      button.setAttribute("aria-pressed", String(showMovieLabels));
+      button.classList.toggle("is-active", showMovieLabels);
+      renderStep(currentStep);
+    });
+  });
+
   mapElement.addEventListener(
     "wheel",
     (event) => {
@@ -485,16 +500,14 @@ function infoPreviewHTML({ label, title, body }) {
 }
 
 function residualMatrixPreviewHTML() {
-  const rowIndices = focusUserIndices.slice(0, 4);
-  const movieIndices = focusMovieIndices.slice(0, 5);
-  const columns = `86px repeat(${movieIndices.length}, minmax(48px, 1fr))`;
+  const columns = `86px repeat(${allMovieIndices.length}, minmax(48px, 1fr))`;
   const header = [
     `<span class="mini-matrix-cell is-empty"></span>`,
-    ...movieIndices.map((columnIndex) => `<span class="mini-matrix-cell is-header">${movies[columnIndex]}</span>`),
+    ...allMovieIndices.map((columnIndex) => `<span class="mini-matrix-cell is-header">${movies[columnIndex]}</span>`),
   ].join("");
-  const body = rowIndices
+  const body = allUserIndices
     .map((rowIndex) => {
-      const cells = movieIndices
+      const cells = allMovieIndices
         .map((columnIndex) => {
           const value = ratings[rowIndex][columnIndex] === null ? null : model.residualMatrix[rowIndex][columnIndex];
           return `<span class="mini-matrix-cell ${value === null ? "is-implicit" : ""}">${value === null ? "0*" : format(value, 2)}</span>`;
@@ -515,11 +528,11 @@ function residualMatrixPreviewHTML() {
 function residualVectorPreviewHTML({ axis, index }) {
   const entries =
     axis === "row"
-      ? focusMovieIndices.map((movieIndex) => ({
+      ? allMovieIndices.map((movieIndex) => ({
           label: movies[movieIndex],
           value: ratings[index][movieIndex] === null ? null : model.residualMatrix[index][movieIndex],
         }))
-      : focusUserIndices.map((userIndex) => ({
+      : allUserIndices.map((userIndex) => ({
           label: users[userIndex],
           value: ratings[userIndex][index] === null ? null : model.residualMatrix[userIndex][index],
         }));
@@ -665,25 +678,21 @@ function sourcePillHTML({ label, title, body }) {
   `;
 }
 
-function sparseMapHTML({ focused = false } = {}) {
-  const rowSet = new Set(focused ? focusUserIndices : users.map((_, index) => index));
-  const columnSet = new Set(focused ? focusMovieIndices : movies.map((_, index) => index));
-  const rowPosition = new Map((focused ? focusUserIndices : users.map((_, index) => index)).map((value, index) => [value, index]));
-  const columnPosition = new Map((focused ? focusMovieIndices : movies.map((_, index) => index)).map((value, index) => [value, index]));
-  const visibleEntries = model.sparseEntries.filter(
-    (entry) => rowSet.has(entry.row) && columnSet.has(entry.column)
-  );
-  const visibleRows = focused ? focusUserIndices.length : users.length;
-  const visibleColumns = focused ? focusMovieIndices.length : movies.length;
+function sparseMapHTML() {
+  const rowPosition = new Map(allUserIndices.map((value, index) => [value, index]));
+  const columnPosition = new Map(allMovieIndices.map((value, index) => [value, index]));
+  const fullEntries = model.sparseEntries;
+  const visibleRows = users.length;
+  const visibleColumns = movies.length;
 
-  const list = visibleEntries
+  const list = fullEntries
     .map(
       (entry) =>
         `<div>${users[entry.row]} / ${movies[entry.column]} -> rating ${entry.rating}, residual ${format(entry.residual, 2)}</div>`
     )
     .join("");
 
-  const dots = visibleEntries
+  const dots = fullEntries
     .map((entry, index) => {
       const x = ((columnPosition.get(entry.column) + 0.5) / visibleColumns) * 100;
       const y = ((rowPosition.get(entry.row) + 0.5) / visibleRows) * 100;
@@ -696,7 +705,7 @@ function sparseMapHTML({ focused = false } = {}) {
       <div>
         <div class="matrix-title">
           <strong>Only known ratings are stored</strong>
-          <span>${visibleEntries.length} visible coordinates; ${knownRatings} used by the calculation</span>
+          <span>${fullEntries.length} stored coordinates in the full table</span>
         </div>
         <div class="dot-field" style="background-size:calc(100% / ${visibleColumns}) calc(100% / ${visibleRows})">${dots}</div>
       </div>
@@ -754,7 +763,7 @@ function hiddenAxesHTML() {
         <div class="matrix-title">
           <strong>Source matrix A</strong>
           ${sourcePillHTML({
-            label: "from Step 5",
+            label: "from Step 4",
             title: "A is the sparse residual matrix",
             body: residualMatrixPreviewHTML(),
           })}
@@ -793,7 +802,7 @@ function userCoordinatesHTML() {
         </div>
         <p>This row is the source. It says how ${users[row]}'s known ratings differ from each movie's average.</p>
         <div class="inline-source-preview">
-          <strong>${users[row]}'s visible residuals</strong>
+          <strong>${users[row]}'s full residual row</strong>
           ${residualVectorPreviewHTML({ axis: "row", index: row })}
         </div>
       </div>
@@ -832,7 +841,7 @@ function movieCoordinatesHTML() {
         </div>
         <p>This column is the source. It says which users rated ${movies[column]} above or below that movie's average.</p>
         <div class="inline-source-preview">
-          <strong>${movies[column]}'s visible residuals</strong>
+          <strong>${movies[column]}'s full residual column</strong>
           ${residualVectorPreviewHTML({ axis: "column", index: column })}
         </div>
       </div>
@@ -952,6 +961,8 @@ function preferenceMapHTML() {
         point.type === "movie"
           ? `<em><b>${point.label}</b><small>${point.category}</small></em>`
           : `<em><b>${point.label}</b><small>${point.segment}</small></em>`;
+      const visibleLabel =
+        point.type === "movie" ? showMovieLabels && shouldLabel : shouldLabel;
       return `
         <span
           class="map-point ${point.type}${categoryClass}${point.target ? " is-target" : ""}"
@@ -960,7 +971,7 @@ function preferenceMapHTML() {
           data-map-base-y="${baseY}"
           title="${title}"
         >
-          ${shouldLabel ? labelHTML : ""}
+          ${visibleLabel ? labelHTML : ""}
         </span>
       `;
     })
@@ -1012,6 +1023,12 @@ function preferenceMapHTML() {
             data-show-closest="true"
             aria-pressed="${showClosestUnwatchedMovie}"
           >show closest unwatched movie</button>
+          <button
+            class="closest-button${showMovieLabels ? " is-active" : ""}"
+            type="button"
+            data-show-movie-labels="true"
+            aria-pressed="${showMovieLabels}"
+          >movie names</button>
         </div>
         ${
           closestLink
@@ -1255,27 +1272,12 @@ const steps = [
     `,
   },
   {
-    tab: "Focus",
-    title: "We crop the view for visualization purposes",
-    text: "The calculation still uses the full matrix, but the visualization now focuses on a smaller slice so each step is readable.",
-    inspectorTitle: "Display-only crop",
-    inspectorText: "This crop includes sci-fi fans, romance fans, and you. It does not change the calculation result.",
-    render: () =>
-      matrixHTML({
-            title: "Focused working view",
-            note: "cropped UI; full 10 x 16 matrix still used",
-        values: ratings,
-        rowIndices: focusUserIndices,
-        movieIndices: focusMovieIndices,
-      }),
-  },
-  {
     tab: "Sparse",
     title: "Sparse storage keeps only known ratings",
     text: "The matrix has many blanks, so the sparse representation stores coordinates and values only for ratings that actually exist.",
     inspectorTitle: "Sparse matrix",
     inspectorText: "This is why sparse matrices are useful: the system avoids pretending every user watched every movie.",
-    render: () => sparseMapHTML({ focused: true }),
+    render: sparseMapHTML,
   },
   {
     tab: "Average",
@@ -1292,7 +1294,7 @@ const steps = [
     inspectorTitle: "SVD input",
     inspectorText: "0* is not a rating. It marks an unstored residual entry in this demo's matrix, so the calculation does not pretend the user gave that movie a low score.",
     render: () =>
-      matrixHTML({
+      matrixSceneHTML({
         title: "Sparse residual matrix",
         note: `0* = implicit zero residual; known 0.00 = real known residual`,
         values: model.residualMatrix.map((row, rowIndex) =>
@@ -1300,8 +1302,6 @@ const steps = [
         ),
         mode: "residuals",
         showImplicitZeros: true,
-        rowIndices: focusUserIndices,
-        movieIndices: focusMovieIndices,
       }),
   },
   {
@@ -1359,12 +1359,10 @@ const steps = [
     inspectorTitle: "Prediction",
     inspectorText: "The prediction is movie average plus SVD adjustment. This is why missing cells can now receive estimated scores.",
     render: () =>
-      matrixHTML({
+      matrixSceneHTML({
         title: "Predicted ratings after SVD",
         note: "movie average + reconstructed residual",
         values: model.predictedRatings,
-        rowIndices: focusUserIndices,
-        movieIndices: focusMovieIndices,
       }),
   },
   {
@@ -1406,7 +1404,7 @@ function renderStepTabs() {
   });
 }
 
-function renderStep(index) {
+function renderStep(index = currentStep) {
   currentStep = (index + steps.length) % steps.length;
   const step = steps[currentStep];
   const showsSparseInspector = currentStep === sparseStepIndex;

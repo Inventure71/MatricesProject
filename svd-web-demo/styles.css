@@ -110,6 +110,13 @@ h3 {
   justify-content: flex-end;
 }
 
+.playback-controls {
+  display: grid;
+  grid-template-columns: 40px minmax(88px, max-content) 40px;
+  gap: 8px;
+  align-items: center;
+}
+
 .k-control {
   display: inline-grid;
   grid-template-columns: auto repeat(6, 32px);
@@ -319,6 +326,8 @@ h3 {
   display: grid;
   align-content: start;
   gap: 16px;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
   animation: planeIn 520ms ease both;
 }
@@ -345,8 +354,8 @@ h3 {
 .matrix-grid {
   display: grid;
   gap: 5px;
-  width: 100%;
-  min-width: 0;
+  width: max-content;
+  min-width: 100%;
 }
 
 .cell {
@@ -378,8 +387,9 @@ h3 {
   position: relative;
   z-index: 1;
   max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  min-width: 0;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .movie-header,
@@ -397,7 +407,9 @@ h3 {
   display: grid;
   justify-items: center;
   gap: 3px;
+  width: 100%;
   line-height: 1.05;
+  text-align: center;
 }
 
 .movie-header b,
@@ -411,9 +423,14 @@ h3 {
 .movie-header em,
 .user-header em {
   color: var(--ink);
-  font-size: 11px;
+  max-width: 100%;
+  font-size: clamp(8px, 1.2vw, 11px);
   font-style: normal;
   font-weight: 760;
+  line-height: 1.05;
+  overflow-wrap: normal;
+  text-wrap: balance;
+  word-break: normal;
 }
 
 .user-header em {
@@ -440,6 +457,10 @@ h3 {
 .matrix-wrap.wide .cell {
   min-height: 28px;
   font-size: 10px;
+}
+
+.matrix-wrap.wide .movie-header em {
+  font-size: clamp(7px, 0.95vw, 9px);
 }
 
 .cell.missing {
@@ -493,9 +514,11 @@ h3 {
   color: var(--accent-strong);
 }
 
+.matrix-scene,
 .editable-matrix-scene {
   display: grid;
   gap: 20px;
+  min-width: 0;
 }
 
 .rating-editor {
@@ -1217,11 +1240,7 @@ h3 {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background:
-    linear-gradient(rgba(15, 118, 110, 0.09) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15, 118, 110, 0.09) 1px, transparent 1px),
-    rgba(255, 253, 248, 0.82);
-  background-size: 12.5% 12.5%;
+  background: white;
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -1235,7 +1254,7 @@ h3 {
   height: 100%;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 180ms ease;
+  transition: none;
 }
 
 .closest-link-layer.is-visible,
@@ -1260,26 +1279,26 @@ h3 {
   inset: 0;
   transform: translate(var(--map-pan-x, 0), var(--map-pan-y, 0)) scale(var(--map-scale, 1));
   transform-origin: center;
-  transition: transform 16ms ease;
+  transition: none;
   pointer-events: none;
 }
 
 .map-axis {
   position: absolute;
   z-index: 1;
-  background: rgba(111, 107, 97, 0.4);
+  background: rgba(111, 107, 97, 0.58);
 }
 
 .x-axis {
   top: 50%;
-  left: 7%;
-  right: 7%;
+  left: 2%;
+  right: 2%;
   height: 1px;
 }
 
 .y-axis {
-  top: 7%;
-  bottom: 7%;
+  top: 2%;
+  bottom: 2%;
   left: 50%;
   width: 1px;
 }
@@ -1313,7 +1332,7 @@ h3 {
   background: var(--accent);
   box-shadow: 0 0 0 3px rgba(255, 253, 248, 0.92), 0 4px 14px rgba(24, 22, 18, 0.16);
   transform: translate(-50%, -50%);
-  transition: left 160ms ease, top 160ms ease;
+  transition: none;
 }
 
 .preference-map.is-dragging .map-point {
@@ -1321,8 +1340,11 @@ h3 {
 }
 
 .map-point.movie {
+  width: 7px;
+  height: 7px;
   border-radius: 3px;
   background: var(--category-color, var(--warm));
+  box-shadow: none;
 }
 
 .map-point.is-target.user {
@@ -1333,9 +1355,10 @@ h3 {
 }
 
 .map-point.is-target.movie {
-  width: 16px;
-  height: 16px;
+  width: 10px;
+  height: 10px;
   background: #b85c38;
+  box-shadow: none;
 }
 
 .map-point em {

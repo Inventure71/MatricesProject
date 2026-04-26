@@ -48,7 +48,7 @@ python3 demo.py
 The calculation follows the Python demo idea over a 10 user x 16 movie matrix:
 
 1. Keep the original user-movie ratings sparse.
-2. Show the full matrix, then crop the UI to a smaller teaching subset.
+2. Store known ratings in a sparse-style coordinate list.
 3. Compute movie-average baselines.
 4. Store known rating residuals in a sparse-style matrix.
 5. Run a small truncated SVD calculation, let the user choose `k` from 1 to 6,
