@@ -18,6 +18,18 @@ function categoryClassName(category) {
   return `category-${category.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 }
 
+function userLabelHTML(rowIndex) {
+  return rowIndex === targetUserIndex ? `<strong class="target-user-name">You</strong>` : users[rowIndex];
+}
+
+function userLabelText(rowIndex) {
+  return rowIndex === targetUserIndex ? "You" : users[rowIndex];
+}
+
+function targetUserLabelHTML() {
+  return userLabelHTML(targetUserIndex);
+}
+
 function movieHeaderHTML(movieIndex) {
   const category = movieCategories[movieIndex];
   const movie = movies[movieIndex];
@@ -38,13 +50,14 @@ function userHeaderHTML(rowIndex, isTargetRow) {
   return `
     <div class="${classNames.join(" ")}">
       <span>
-        <b>${users[rowIndex]}</b>
-        <em>${userSegments[rowIndex]}</em>
+        <b>${userLabelHTML(rowIndex)}</b>
+        ${rowIndex === targetUserIndex ? "" : `<em>${userSegments[rowIndex]}</em>`}
       </span>
     </div>
   `;
 }
 const mapView = { scale: 1, x: 0, y: 0 };
+const factorLineView = { zoom: 1, dragging: false, startX: 0, startScrollLeft: 0 };
 let showClosestUnwatchedMovie = false;
 let showMovieLabels = true;
 
@@ -259,10 +272,10 @@ function ratingEditorHTML() {
     .join("");
 
   return `
-    <section class="rating-editor" aria-label="Your editable movie ratings">
+    <section class="rating-editor" aria-label="Editable movie ratings for You">
       <div class="rating-editor-head">
         <div>
-          <strong>Your ratings</strong>
+          <strong>Ratings for ${targetUserLabelHTML()}</strong>
           <span>Clear means unrated, so the movie can be recommended again.</span>
         </div>
         <button class="reset-ratings" type="button" data-reset-ratings="true">Reset</button>
@@ -513,7 +526,7 @@ function residualMatrixPreviewHTML() {
           return `<span class="mini-matrix-cell ${value === null ? "is-implicit" : ""}">${value === null ? "0*" : format(value, 2)}</span>`;
         })
         .join("");
-      return `<span class="mini-matrix-cell is-header">${users[rowIndex]}</span>${cells}`;
+      return `<span class="mini-matrix-cell is-header">${userLabelHTML(rowIndex)}</span>${cells}`;
     })
     .join("");
 
@@ -533,7 +546,7 @@ function residualVectorPreviewHTML({ axis, index }) {
           value: ratings[index][movieIndex] === null ? null : model.residualMatrix[index][movieIndex],
         }))
       : allUserIndices.map((userIndex) => ({
-          label: users[userIndex],
+          label: userLabelHTML(userIndex),
           value: ratings[userIndex][index] === null ? null : model.residualMatrix[userIndex][index],
         }));
 
@@ -561,7 +574,7 @@ function coordinatePreviewHTML() {
     <span class="coordinate-preview" style="grid-template-columns:${columns}">
       <span></span>
       ${userVector.map((_, index) => `<strong>Factor ${index + 1}</strong>`).join("")}
-      <span>${users[row]}</span>
+      <span>${userLabelHTML(row)}</span>
       ${userVector.map((value) => `<b>${format(value, 2)}</b>`).join("")}
       <span>${movies[column]}</span>
       ${movieVector.map((value) => `<b>${format(value, 2)}</b>`).join("")}
@@ -585,66 +598,120 @@ function hiddenFactorsPreviewHTML() {
   `;
 }
 
-function factorCalculationHTML() {
-  const topRows = model.componentEnergy.slice(0, factorCount);
-  const formulaRows = topRows
+function svdDecompositionHTML() {
+  const firstFactor = model.componentEnergy[0];
+  const factorOneMovieValues = allMovieIndices.map((movieIndex) => ({
+    movieIndex,
+    movie: movies[movieIndex],
+    value: model.movieFactors[0][movieIndex],
+  }));
+  const minFactorOneValue = Math.min(...factorOneMovieValues.map((item) => item.value));
+  const maxFactorOneValue = Math.max(...factorOneMovieValues.map((item) => item.value));
+  const factorOneRange = maxFactorOneValue - minFactorOneValue || 1;
+  const sortedFactorLineMovies = [...factorOneMovieValues].sort((a, b) => a.value - b.value);
+  const factorLinePoints = sortedFactorLineMovies
+    .map((item, index, sorted) => {
+      const position = (item.value - minFactorOneValue) / factorOneRange;
+      const isAnchor = index === 0 || index === sorted.length - 1;
+      return `
+        <button class="factor-line-point ${item.value < 0 ? "is-negative" : "is-positive"} ${index % 2 === 0 ? "is-top" : "is-bottom"} ${isAnchor ? "is-anchor" : ""}" type="button" style="--x:${position}" title="${item.movie}: ${format(item.value, 3)}">
+          <i></i>
+          <b>${item.movie}</b>
+          <em>${format(item.value, 3)}</em>
+        </button>
+      `;
+    })
+    .join("");
+  const factorVectorRows = allMovieIndices
     .map(
-      (item) => `
-        <div class="factor-source-row${item.component <= factorCount ? " is-kept" : ""}">
-          <span>Factor ${item.component}</span>
-          <strong>${format(item.singularValue, 2)}</strong>
-          <em>${format(item.energy, 2)}</em>
-          <b>${format(item.cumulativeShare * 100, 1)}%</b>
+      (movieIndex) => `
+        <div>
+          <span>${movies[movieIndex]}</span>
+          <strong>${format(model.movieFactors[0][movieIndex], 3)}</strong>
+        </div>
+      `
+    )
+    .join("");
+  const pendingUserRows = targetLastUserIndices()
+    .map(
+      (userIndex) => `
+        <div class="is-pending${userIndex === targetUserIndex ? " is-target" : ""}">
+          <span>${userLabelHTML(userIndex)}</span>
+          <strong>?</strong>
         </div>
       `
     )
     .join("");
 
   return `
-    <div class="factor-source-scene">
-      <div class="factor-source-panel">
-        <div class="matrix-title">
-          <strong>How one factor is found</strong>
-          ${sourcePillHTML({
-            label: "source A",
-            title: "A is the residual matrix",
-            body: residualMatrixPreviewHTML(),
-          })}
+    <div class="svd-story-scene">
+      <div class="svd-machine">
+        <div class="svd-machine-side">
+          <span>Input</span>
+          <strong>A</strong>
+          <p>Residual matrix from Step 4</p>
         </div>
-        <div class="factor-flow">
-          <div>
-            <span>1</span>
-            <strong>Start from A</strong>
-            <p>A is the sparse residual matrix: known rating minus movie average.</p>
-          </div>
-          <div>
-            <span>2</span>
-            <strong>Build A<sup>T</sup>A</strong>
-            <p>This compares movie columns with movie columns, so similar rating-deviation patterns line up.</p>
-          </div>
-          <div>
-            <span>3</span>
-            <strong>Find eigenvectors</strong>
-            <p>Each eigenvector becomes a hidden movie direction. The biggest eigenvalue gives the strongest direction.</p>
-          </div>
-          <div>
-            <span>4</span>
-            <strong>Take square roots</strong>
-            <p>The singular value is sqrt(eigenvalue). Bigger singular values explain more of A.</p>
-          </div>
+        <div class="svd-machine-core">
+          <span>Run SVD</span>
+          <strong>A ~= U &Sigma; V<sup>T</sup></strong>
+          <p>SVD discovers all the hidden factors it can find from the residual matrix A.</p>
+        </div>
+        <div class="svd-machine-side">
+          <span>Output</span>
+          <strong>shared factors</strong>
+          <p>Here we show the movie-side vectors and strength numbers first. User coordinates are projected in Step 7.</p>
         </div>
       </div>
-      <div class="factor-source-panel">
-        <div class="matrix-title">
-          <strong>Ranked factor strength</strong>
-          <span>energy = singular value squared</span>
+
+      <div class="svd-story-grid">
+        <div class="svd-story-panel">
+          <span>Movie side</span>
+          <strong>Factor 1 vector</strong>
+          <p>All ${movies.length} movie values. Each value says where that movie sits on this hidden direction.</p>
+          <div class="factor-vector-mini is-compact is-scrollable">
+            <div>
+              <span>Movie</span>
+              <strong>value</strong>
+            </div>
+            ${factorVectorRows}
+          </div>
         </div>
-        <div class="factor-source-table">
-          <span>Factor</span>
-          <span>Singular value</span>
-          <span>Energy</span>
-          <span>Cumulative</span>
-          ${formulaRows}
+        <div class="svd-story-panel">
+          <span>User side</span>
+          <strong>User coordinates come next</strong>
+          <p>Each user will get one value on this same factor, but we calculate those by doing the dot product of user rows with this movie vector in Step 7.</p>
+          <div class="factor-vector-mini is-compact is-scrollable">
+            <div>
+              <span>User</span>
+              <strong>coordinate</strong>
+            </div>
+            ${pendingUserRows}
+          </div>
+        </div>
+        <div class="svd-story-panel">
+          <span>Strength</span>
+          <strong>singular value = ${format(firstFactor.singularValue, 2)}</strong>
+          <p>One number for the whole factor. It says how important this direction is compared with the others.</p>
+          <div class="factor-line-card">
+            <div class="factor-line-head">
+              <small>All movies on Factor 1</small>
+              <div class="factor-line-controls" aria-label="Factor line zoom controls">
+                <button type="button" data-factor-line-zoom="-1" title="Zoom out">-</button>
+                <button type="button" data-factor-line-reset title="Reset view">Reset</button>
+                <button type="button" data-factor-line-zoom="1" title="Zoom in">+</button>
+              </div>
+            </div>
+            <div class="factor-line-viewport" data-factor-line-viewport aria-label="Movies placed on Factor 1">
+              <div class="factor-line-track" data-factor-line-track>
+                <div class="factor-line-axis">
+                  <span>negative</span>
+                  <span>positive</span>
+                </div>
+                <div class="factor-line-zero"></div>
+                ${factorLinePoints}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -669,6 +736,56 @@ function factorCoordinateRowsHTML({ values, description }) {
   `;
 }
 
+function userFactorDotProductHTML({ row, factorIndex }) {
+  const factorVector = model.movieFactors[factorIndex];
+  const products = allMovieIndices.map((movieIndex) => {
+    const isKnown = ratings[row][movieIndex] !== null;
+    const residual = model.residualMatrix[row][movieIndex];
+    const factorValue = factorVector[movieIndex];
+
+    return {
+      movie: movies[movieIndex],
+      isKnown,
+      residual,
+      factorValue,
+      product: residual * factorValue,
+    };
+  });
+  const coordinate = products.reduce((total, item) => total + item.product, 0);
+
+  return `
+    <div class="user-factor-dot">
+      <div class="matrix-title">
+        <strong>Calculate ${userLabelHTML(row)}'s Factor ${factorIndex + 1} coordinate</strong>
+        <span>user row x movie factor</span>
+      </div>
+      <p>Take ${userLabelHTML(row)}'s residual row from A and multiply it column-by-column with the Factor ${factorIndex + 1} movie vector from Step 5. The sum is the user coordinate.</p>
+      <div class="dot-product-table">
+        <span>Movie</span>
+        <span>${userLabelHTML(row)} residual</span>
+        <span>Factor ${factorIndex + 1}</span>
+        <span>Product</span>
+        ${products
+          .map(
+            (item) => `
+              <div class="dot-product-row${item.isKnown ? "" : " is-implicit"}">
+                <span>${item.movie}</span>
+                <strong>${item.isKnown ? format(item.residual, 2) : "0*"}</strong>
+                <strong>${format(item.factorValue, 4)}</strong>
+                <b>${format(item.product, 4)}</b>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+      <div class="coordinate-sum">
+        <span>Add the product column</span>
+        <strong>${format(coordinate, 2)}</strong>
+      </div>
+    </div>
+  `;
+}
+
 function sourcePillHTML({ label, title, body }) {
   return `
     <span class="source-pill">
@@ -688,7 +805,7 @@ function sparseMapHTML() {
   const list = fullEntries
     .map(
       (entry) =>
-        `<div>${users[entry.row]} / ${movies[entry.column]} -> rating ${entry.rating}, residual ${format(entry.residual, 2)}</div>`
+        `<div>${userLabelHTML(entry.row)} / ${movies[entry.column]} -> rating ${entry.rating}, residual ${format(entry.residual, 2)}</div>`
     )
     .join("");
 
@@ -718,6 +835,8 @@ function hiddenAxesHTML() {
   const chosenEnergy = model.componentEnergy[factorCount - 1];
   const targetEnergy = model.componentEnergy[energyTargetCount - 1];
   const enoughEnergy = model.componentEnergy[enoughFactorCount - 1];
+  const totalEnergy = model.totalEnergy;
+  const firstFactor = model.componentEnergy[0];
   const targetSentence =
     factorCount === energyTargetCount
       ? `This is the report-style choice closest to the 80%-90% target for the larger demo dataset.`
@@ -744,46 +863,32 @@ function hiddenAxesHTML() {
     })
     .join("");
 
-  const bars = model.singularValues
-    .map((value, index) => {
-      const width = `${(value / model.singularValues[0]) * 100}%`;
-      return `
-        <div class="axis-row" style="--delay:${index * 140}ms">
-          <span>Hidden factor ${index + 1}</span>
-          <strong>${format(value, 2)}</strong>
-          <div class="axis-bar"><span style="--w:${width}"></span></div>
-        </div>
-      `;
-    })
-    .join("");
-
   return `
-    <div class="svd-origin-scene">
-      <div class="origin-panel">
-        <div class="matrix-title">
-          <strong>Source matrix A</strong>
-          ${sourcePillHTML({
-            label: "from Step 4",
-            title: "A is the sparse residual matrix",
-            body: residualMatrixPreviewHTML(),
-          })}
+    <div class="k-choice-scene">
+      <div class="k-choice-explainer">
+        <div>
+          <span>Goal</span>
+          <p>SVD gives ranked hidden factors. Keeping more factors preserves more detail, but also makes the model less compressed. k is the number of factors we keep.</p>
         </div>
-        <p>The input is not raw star ratings. It is the residual matrix: known rating minus movie average. In this demo matrix, missing entries are left unstored and behave like 0* residuals during the calculation.</p>
+        <div>
+          <span>Rule</span>
+          <strong>${format(firstFactor.singularValue, 2)}<sup>2</sup> = ${format(firstFactor.energy, 2)}</strong>
+          <p>${format(firstFactor.energy, 2)} / ${format(totalEnergy, 2)} = ${format((firstFactor.energy / totalEnergy) * 100, 1)}% of the residual pattern.</p>
+        </div>
+        <div>
+          <span>Current choice</span>
+          <strong>k = ${factorCount} keeps ${format(chosenEnergy.cumulativeShare * 100, 1)}%</strong>
+          <p>${targetSentence} k = ${enoughFactorCount} adds only ${format((enoughEnergy.cumulativeShare - targetEnergy.cumulativeShare) * 100, 1)} percentage points after k = ${energyTargetCount}.</p>
+        </div>
       </div>
-      <div class="origin-panel">
+
+      <div class="k-choice-main">
         <div class="matrix-title">
-          <strong>SVD ranks directions</strong>
-          ${sourcePillHTML({
-            label: "kept factors",
-            title: `${factorCount} strongest direction${factorCount === 1 ? "" : "s"}`,
-            body: hiddenFactorsPreviewHTML(),
-          })}
+          <strong>Add factors from strongest to weakest</strong>
+          <span>cumulative preserved energy</span>
         </div>
-        <p>Like the report, the demo chooses k by energy: square each singular value, add the strongest ones, and compare how much of the residual pattern is preserved.</p>
         <div class="energy-list">${energyRows}</div>
-        <p>The current demo is using k = ${factorCount}, preserving ${format(chosenEnergy.cumulativeShare * 100, 1)}% of the residual energy. ${targetSentence} k = ${enoughFactorCount} preserves ${format(enoughEnergy.cumulativeShare * 100, 1)}%, so it adds only ${format((enoughEnergy.cumulativeShare - targetEnergy.cumulativeShare) * 100, 1)} percentage points after k = ${energyTargetCount}.</p>
       </div>
-      <div class="axis-list">${bars}</div>
     </div>
   `;
 }
@@ -794,34 +899,23 @@ function userCoordinatesHTML() {
   const userVector = userCoordinates.map((value) => format(value, 2)).join(", ");
 
   return `
-    <div class="coordinate-origin-scene">
+    <div class="coordinate-origin-scene user-coordinate-scene">
+      ${userFactorDotProductHTML({ row, factorIndex: 0 })}
       <div class="origin-panel">
         <div class="matrix-title">
-          <strong>${users[row]}'s residual row</strong>
-          <span>row from A</span>
-        </div>
-        <p>This row is the source. It says how ${users[row]}'s known ratings differ from each movie's average.</p>
-        <div class="inline-source-preview">
-          <strong>${users[row]}'s full residual row</strong>
-          ${residualVectorPreviewHTML({ axis: "row", index: row })}
-        </div>
-      </div>
-      <div class="coordinate-arrow">=</div>
-      <div class="origin-panel">
-        <div class="matrix-title">
-          <strong>User coordinates</strong>
+          <strong>Now the placeholders are filled</strong>
           ${sourcePillHTML({
             label: "hidden axes",
             title: "Coordinates use these same factors",
             body: hiddenFactorsPreviewHTML(),
           })}
         </div>
-        <p>SVD compares that row with each hidden factor and gives the user one number per factor.</p>
+        <p>Repeat that same dot product with every kept movie factor. Each sum fills one user coordinate that was left as ? in Step 5.</p>
         ${factorCoordinateRowsHTML({
           values: userCoordinates,
-          description: (index) => `${users[row]}'s position on hidden factor ${index + 1}`,
+          description: (index) => `${userLabelHTML(row)}'s row multiplied by Factor ${index + 1}`,
         })}
-        <span class="factor-label">${users[row]} -> [${userVector}]</span>
+        <span class="factor-label">${userLabelHTML(row)} -> [${userVector}]</span>
       </div>
     </div>
   `;
@@ -831,35 +925,53 @@ function movieCoordinatesHTML() {
   const { column } = predictionExample;
   const movieCoordinates = model.movieFactors.map((factorRow) => factorRow[column]);
   const movieVector = movieCoordinates.map((value) => format(value, 2)).join(", ");
+  const factorRows = movieCoordinates
+    .map(
+      (value, index) => `
+        <div class="movie-factor-row">
+          <span>Factor ${index + 1}</span>
+          <strong>${format(value, 4)}</strong>
+          <em>${movies[column]} in Factor ${index + 1}</em>
+        </div>
+      `
+    )
+    .join("");
 
   return `
-    <div class="coordinate-origin-scene">
+    <div class="movie-coordinate-scene">
       <div class="origin-panel">
         <div class="matrix-title">
-          <strong>${movies[column]}'s residual column</strong>
-          <span>column from A</span>
+          <strong>Use V<sup>T</sup> from SVD</strong>
+          <span>movie factor vectors</span>
         </div>
-        <p>This column is the source. It says which users rated ${movies[column]} above or below that movie's average.</p>
+        <p>SVD already produced one movie vector per hidden factor. To locate a movie, read that movie's value inside each kept factor vector.</p>
         <div class="inline-source-preview">
-          <strong>${movies[column]}'s full residual column</strong>
-          ${residualVectorPreviewHTML({ axis: "column", index: column })}
+          <strong>Factor 1 is a full vector across all movies</strong>
+          <div class="factor-vector-mini is-scrollable">
+            <div>
+              <span>Movie</span>
+              <strong>Factor 1 value</strong>
+            </div>
+            ${allMovieIndices
+              .map(
+                (movieIndex) => `
+                  <div class="${movieIndex === column ? "is-target" : ""}">
+                    <span>${movies[movieIndex]}</span>
+                    <strong>${format(model.movieFactors[0][movieIndex], 4)}</strong>
+                  </div>
+                `
+              )
+              .join("")}
+          </div>
         </div>
       </div>
-      <div class="coordinate-arrow">=</div>
       <div class="origin-panel">
         <div class="matrix-title">
-          <strong>Movie coordinates</strong>
-          ${sourcePillHTML({
-            label: "same axes",
-            title: "Movies use the same hidden factors",
-            body: hiddenFactorsPreviewHTML(),
-          })}
+          <strong>${movies[column]}'s movie coordinates</strong>
+          <span>same axes as users</span>
         </div>
-        <p>SVD learns movie coordinates from relationships between movie columns in A<sup>T</sup>A. Those coordinates use the same hidden factors as the users, so the next step can compare matching positions.</p>
-        ${factorCoordinateRowsHTML({
-          values: movieCoordinates,
-          description: (index) => `${movies[column]}'s position on hidden factor ${index + 1}`,
-        })}
+        <p>Repeat the lookup for every kept factor. The result is the short movie coordinate vector used in the prediction dot product.</p>
+        <div class="movie-factor-rows">${factorRows}</div>
         <span class="factor-label">${movies[column]} -> [${movieVector}]</span>
       </div>
     </div>
@@ -872,7 +984,7 @@ function preferenceMapHTML() {
       <div class="map-switch-scene">
         <div>
           <strong>2D view needs exactly two factors</strong>
-          <p>The map uses x = hidden factor 1 and y = hidden factor 2. You are currently using k = ${factorCount}, so the model lives in ${factorCount} dimensions.</p>
+          <p>The map uses x = hidden factor 1 and y = hidden factor 2. Current k is ${factorCount}, so the model lives in ${factorCount} dimensions.</p>
         </div>
         <button class="primary-button map-switch-button" type="button" data-map-k="2">Switch to k = 2</button>
       </div>
@@ -881,8 +993,9 @@ function preferenceMapHTML() {
 
   const userPoints = users.map((user, rowIndex) => ({
     type: "user",
-    label: user,
-    segment: userSegments[rowIndex],
+    label: userLabelHTML(rowIndex),
+    labelText: userLabelText(rowIndex),
+    segment: rowIndex === targetUserIndex ? "" : userSegments[rowIndex],
     x: model.userFactors[rowIndex][0],
     y: model.userFactors[rowIndex][1],
     target: rowIndex === targetUserIndex,
@@ -956,11 +1069,11 @@ function preferenceMapHTML() {
       const title =
         point.type === "movie"
           ? `${point.label} (${point.category}): (${format(point.x, 2)}, ${format(point.y, 2)})`
-          : `${point.label} (${point.segment}): (${format(point.x, 2)}, ${format(point.y, 2)})`;
+          : `${point.labelText}${point.segment ? ` (${point.segment})` : ""}: (${format(point.x, 2)}, ${format(point.y, 2)})`;
       const labelHTML =
         point.type === "movie"
           ? `<em><b>${point.label}</b><small>${point.category}</small></em>`
-          : `<em><b>${point.label}</b><small>${point.segment}</small></em>`;
+          : `<em><b>${point.label}</b>${point.segment ? `<small>${point.segment}</small>` : ""}</em>`;
       const visibleLabel =
         point.type === "movie" ? showMovieLabels && shouldLabel : shouldLabel;
       return `
@@ -980,9 +1093,9 @@ function preferenceMapHTML() {
     .map(
       (user, index) => `
         <div class="map-user-row${index === targetUserIndex ? " is-you" : ""}">
-          <strong>${user}</strong>
-          <span>${userSegments[index]}</span>
-          <em>${userDescriptions[index]}</em>
+          <strong>${userLabelHTML(index)}</strong>
+          <span>${index === targetUserIndex ? "" : userSegments[index]}</span>
+          <em>${index === targetUserIndex ? "" : userDescriptions[index]}</em>
         </div>
       `
     )
@@ -998,19 +1111,31 @@ function preferenceMapHTML() {
       `
     )
     .join("");
+  const movieGuide = moviePoints
+    .map(
+      (point) => `
+        <div class="map-movie-row ${categoryClassName(point.category)}${point.target ? " is-target" : ""}">
+          <b></b>
+          <strong>${point.label}</strong>
+          <span>${point.category}</span>
+          <em>${format(point.x, 2)}, ${format(point.y, 2)}</em>
+        </div>
+      `
+    )
+    .join("");
 
   return `
     <div class="preference-map-scene">
       <div class="map-explainer">
-        <strong>Hidden preference space</strong>
-        <p>With k = 2, each user and movie has two learned coordinates. Category colors explain the movie labels; point positions still come from SVD.</p>
+        <strong>All users and all movies</strong>
+        <p>With k = 2, every user and every movie has two coordinates: Factor 1 on x and Factor 2 on y. This map plots all ${users.length} users and all ${movies.length} movies.</p>
         <div class="map-legend">
           <span><b class="legend-user"></b> Users</span>
           <span><b class="legend-movie category-sci-fi"></b> Sci-Fi</span>
           <span><b class="legend-movie category-action"></b> Action</span>
           <span><b class="legend-movie category-comedy"></b> Comedy</span>
           <span><b class="legend-movie category-romance"></b> Romance</span>
-          <span><b class="legend-you"></b> You</span>
+          <span><b class="legend-you"></b> ${targetUserLabelHTML()}</span>
         </div>
         <div class="map-toolbar" aria-label="Map controls">
           <button type="button" data-map-zoom="out" aria-label="Zoom out">-</button>
@@ -1028,21 +1153,25 @@ function preferenceMapHTML() {
             type="button"
             data-show-movie-labels="true"
             aria-pressed="${showMovieLabels}"
-          >movie names</button>
+          >all movie names</button>
         </div>
         ${
           closestLink
             ? `<p class="closest-summary">Closest unrated movie on this 2D map: <strong>${closestLink.movie}</strong> <span class="rank-category ${categoryClassName(closestLink.category)}">${closestLink.category}</span>, predicted ${format(closestLink.score, 2)}.</p>`
             : ""
         }
-        <p class="map-hint">Drag the map to move around. Scroll or use + to zoom up to 700% into crowded points.</p>
+        <p class="map-hint">Drag the map to move around. Scroll or use + to zoom into crowded points; every plotted point stays part of the map.</p>
         <div class="map-guide">
-          <strong>User profiles</strong>
+          <strong>All user coordinates</strong>
           ${userGuide}
         </div>
         <div class="map-guide">
-          <strong>Movie columns</strong>
+          <strong>Movie color key</strong>
           ${categoryGuide}
+        </div>
+        <div class="map-guide map-movie-guide">
+          <strong>All movie coordinates</strong>
+          ${movieGuide}
         </div>
       </div>
       <div class="preference-map${showClosestUnwatchedMovie ? " is-showing-closest" : ""}" aria-label="2D hidden preference map">
@@ -1074,7 +1203,7 @@ function preferenceMapHTML() {
 function baselineCalculationHTML() {
   const { row, column } = baselineExample;
   const knownColumnRatings = ratings
-    .map((ratingRow, rowIndex) => ({ user: users[rowIndex], rating: ratingRow[column] }))
+    .map((ratingRow, rowIndex) => ({ user: userLabelHTML(rowIndex), rating: ratingRow[column] }))
     .filter((item) => item.rating !== null);
   const average = model.movieAverages[column];
   const rating = ratings[row][column];
@@ -1087,7 +1216,7 @@ function baselineCalculationHTML() {
       <div class="calc-panel">
         <div class="matrix-title">
           <strong>Follow one known rating</strong>
-          <span>${users[row]} rated ${movies[column]} = ${rating}</span>
+          <span>${userLabelHTML(row)} rated ${movies[column]} = ${rating}</span>
         </div>
         <div class="formula-stack">
           <div class="formula-line">
@@ -1100,7 +1229,7 @@ function baselineCalculationHTML() {
           </div>
           <div class="formula-line emphasis">
             <span>3. SVD receives the deviation, not the raw rating</span>
-            <strong>${users[row]} is ${format(Math.abs(residual), 2)} ${residual >= 0 ? "above" : "below"} this movie's baseline</strong>
+            <strong>${userLabelHTML(row)} is ${format(Math.abs(residual), 2)} ${residual >= 0 ? "above" : "below"} this movie's baseline</strong>
           </div>
         </div>
       </div>
@@ -1128,7 +1257,7 @@ function svdCalculationHTML() {
         <div class="matrix-title">
           <strong>One blank cell</strong>
           <span>
-            Predict ${movies[column]} for ${users[row]}
+            Predict ${movies[column]} for ${userLabelHTML(row)}
             ${infoPreviewHTML({
               label: "Preview the SVD coordinates from the previous step",
               title: "These coordinates came from Steps 7 and 8",
@@ -1144,7 +1273,7 @@ function svdCalculationHTML() {
 
         <div class="factor-compare-grid">
           <div class="factor-heading"></div>
-          <div class="factor-heading">${users[row]}</div>
+          <div class="factor-heading">${userLabelHTML(row)}</div>
           <div class="factor-heading">${movies[column]}</div>
           <div class="factor-heading">Product</div>
           ${userVector
@@ -1240,7 +1369,7 @@ function recommendationsHTML() {
     <div class="recommend-scene">
       <div class="target-user-panel">
         <div class="matrix-title">
-          <strong>${users[targetUserIndex]} predicted ratings</strong>
+          <strong>${targetUserLabelHTML()} predicted ratings</strong>
           <span>gold outline = currently unrated</span>
         </div>
         <div class="target-row">${rowCells}</div>
@@ -1255,9 +1384,9 @@ const steps = [
   {
     tab: "Full Matrix",
     title: "Start with the full rating matrix",
-    text: "The highlighted row is you. It starts with sample ratings, and you can edit that row below to see how the recommendations change.",
-    inspectorTitle: "Your row",
-    inspectorText: "Blank means unrated. Clearing a rating removes it from your known row, so that movie becomes eligible for recommendation again.",
+    text: `The highlighted row is ${targetUserLabelHTML()}. It starts with sample ratings, and that row can be edited below to see how the recommendations change.`,
+    inspectorTitle: `${targetUserLabelHTML()}'s row`,
+    inspectorText: `Blank means unrated. Clearing a rating removes it from ${targetUserLabelHTML()}'s known row, so that movie becomes eligible for recommendation again.`,
     render: () => `
       <div class="editable-matrix-scene">
         ${matrixHTML({
@@ -1305,35 +1434,35 @@ const steps = [
       }),
   },
   {
-    tab: "Hidden Axes",
-    title: "Choose k by preserved energy",
-    text: "Use the k buttons at the top to choose how many hidden factors SVD keeps. The energy table updates with the current choice; k = 5 is the report-style choice near the 80%-90% target, and k = 6 shows the extra gain is small.",
-    inspectorTitle: "Why compare k = 5 and k = 6",
-    inspectorText: "The top control changes the actual calculation. k = 5 keeps the strongest pattern set near the target range, while k = 6 shows that the next factor adds only a small amount.",
+    tab: "Run SVD",
+    title: "Run SVD on the residual matrix",
+    text: "SVD discovers hidden movie-side factor vectors from matrix A and gives each factor a singular value for strength. We leave user coordinates as placeholders until Step 7 projects users onto those vectors.",
+    inspectorTitle: "What SVD gives us",
+    inspectorText: "The movie vector says how movies line up with the factor. The singular value says how important the factor is. User coordinates are calculated next by A times the movie factors.",
+    render: svdDecompositionHTML,
+  },
+  {
+    tab: "Choose k",
+    title: "Choose how many factors to keep",
+    text: "SVD may produce many hidden factors. We square each singular value into energy, add the strongest factors first, and choose k where enough pattern is preserved.",
+    inspectorTitle: "Why keep only k factors",
+    inspectorText: "Keeping only the strongest k factors compresses the model: fewer numbers to store, faster dot products later, and less weak/noisy detail. The tradeoff is that the prediction keeps most of the useful pattern, not every tiny variation.",
     render: hiddenAxesHTML,
   },
   {
-    tab: "Factor Math",
-    title: "How factors are calculated",
-    text: "SVD does not guess factor names. It builds directions from the residual matrix using A transposed times A, eigenvectors, and singular values.",
-    inspectorTitle: "Factor source",
-    inspectorText: "Eigenvectors give the hidden directions. Singular values rank those directions by strength. Keeping the first k directions gives the low-rank approximation.",
-    render: factorCalculationHTML,
-  },
-  {
     tab: "User Coords",
-    title: "A user row becomes coordinates",
-    text: `For ${users[predictionExample.row]}, SVD turns the user's residual row into one coordinate on each hidden factor.`,
-    inspectorTitle: "User coordinate source",
-    inspectorText: "A user's coordinates come from that user's row in A. The row is compared with the hidden axes found in the previous step.",
+    title: "Calculate user coordinates",
+    text: `Now we fill the user-coordinate placeholders from Step 5. ${userLabelHTML(predictionExample.row)}'s residual row is multiplied by each kept movie factor vector; each dot product becomes one user coordinate.`,
+    inspectorTitle: "Projection onto factors",
+    inspectorText: "This is A times the movie factor vectors. A long user row becomes a short coordinate vector with k numbers.",
     render: userCoordinatesHTML,
   },
   {
     tab: "Movie Coords",
     title: "A movie gets matching coordinates",
-    text: `For ${movies[predictionExample.column]}, SVD learns movie coordinates from A transposed times A, so the movie can be placed on the same hidden factors as the users.`,
+    text: `A movie's coordinates come directly from the movie factor vectors SVD produced. For ${movies[predictionExample.column]}, read that movie's value in each kept factor.`,
     inspectorTitle: "Movie coordinate source",
-    inspectorText: "A movie's coordinates come from the hidden directions learned from A transposed times A. Users and movies must use the same axes so their matching coordinates can be multiplied.",
+    inspectorText: "The user and the movie now live on the same kept hidden factors, so the next step can multiply matching coordinates.",
     render: movieCoordinatesHTML,
   },
   {
@@ -1347,28 +1476,28 @@ const steps = [
   {
     tab: "Dot Product",
     title: "Compare coordinates with a dot product",
-    text: "For one blank cell, SVD compares the user's coordinates and the movie's coordinates on the same hidden factors. The result becomes an adjustment to the movie average.",
+    text: "For one blank cell, SVD multiplies matching user and movie coordinates across the kept factors. The sum becomes an adjustment to the movie average.",
     inspectorTitle: "Dot product",
-    inspectorText: "A factor is an unnamed pattern learned from the residual matrix. Matching signs increase the prediction; opposite signs decrease it.",
+    inspectorText: "Step 7 calculated dot products between a long user row and the factor vectors. This step calculates a dot product between the short user-coordinate vector and the short movie-coordinate vector.",
     render: svdCalculationHTML,
   },
   {
     tab: "Predict",
     title: "The matrix is reconstructed as predictions",
-    text: "The model reconstructs estimated residuals for every cell, then adds movie averages back to get predicted ratings from 1 to 5.",
+    text: "The model reconstructs estimated residuals for every cell, then adds movie averages back. These are model estimates, so even already-rated cells can differ from the original ratings.",
     inspectorTitle: "Prediction",
-    inspectorText: "The prediction is movie average plus SVD adjustment. This is why missing cells can now receive estimated scores.",
+    inspectorText: "The prediction is movie average plus SVD adjustment. Recommendations still filter to movies that were originally blank.",
     render: () =>
       matrixSceneHTML({
         title: "Predicted ratings after SVD",
-        note: "movie average + reconstructed residual",
+        note: "model estimate = movie average + reconstructed residual",
         values: model.predictedRatings,
       }),
   },
   {
     tab: "Recommend",
     title: "Recommend the highest unrated movies",
-    text: `For ${users[targetUserIndex]}, the system filters out movies already rated and ranks the remaining predictions.`,
+    text: `For ${targetUserLabelHTML()}, the system filters out movies already rated and ranks the remaining predictions.`,
     inspectorTitle: "Final rule",
     inspectorText: "Recommendations are not taken from watched movies. They come from the highest predicted scores among cells that are currently blank.",
     render: recommendationsHTML,
@@ -1404,6 +1533,59 @@ function renderStepTabs() {
   });
 }
 
+function bindFactorLineExplorer() {
+  const viewport = els.visualPlane.querySelector("[data-factor-line-viewport]");
+  const track = els.visualPlane.querySelector("[data-factor-line-track]");
+  if (!viewport || !track) return;
+
+  const setTrackWidth = () => {
+    track.style.width = `${Math.round(760 * factorLineView.zoom)}px`;
+  };
+
+  const setZoom = (nextZoom) => {
+    const previousWidth = track.offsetWidth || 760;
+    const viewportCenter = viewport.scrollLeft + viewport.clientWidth / 2;
+    const centerRatio = viewportCenter / previousWidth;
+    factorLineView.zoom = Math.max(1, Math.min(3.5, nextZoom));
+    setTrackWidth();
+    viewport.scrollLeft = centerRatio * track.offsetWidth - viewport.clientWidth / 2;
+  };
+
+  setTrackWidth();
+
+  els.visualPlane.querySelectorAll("[data-factor-line-zoom]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setZoom(factorLineView.zoom + Number(button.dataset.factorLineZoom) * 0.5);
+    });
+  });
+
+  const resetButton = els.visualPlane.querySelector("[data-factor-line-reset]");
+  resetButton?.addEventListener("click", () => {
+    factorLineView.zoom = 1;
+    setTrackWidth();
+    viewport.scrollLeft = 0;
+  });
+
+  viewport.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    factorLineView.dragging = true;
+    factorLineView.startX = event.clientX;
+    factorLineView.startScrollLeft = viewport.scrollLeft;
+    viewport.setPointerCapture(event.pointerId);
+  });
+
+  viewport.addEventListener("pointermove", (event) => {
+    if (!factorLineView.dragging) return;
+    viewport.scrollLeft = factorLineView.startScrollLeft - (event.clientX - factorLineView.startX);
+  });
+
+  const stopDragging = () => {
+    factorLineView.dragging = false;
+  };
+  viewport.addEventListener("pointerup", stopDragging);
+  viewport.addEventListener("pointercancel", stopDragging);
+}
+
 function renderStep(index = currentStep) {
   currentStep = (index + steps.length) % steps.length;
   const step = steps[currentStep];
@@ -1411,16 +1593,17 @@ function renderStep(index = currentStep) {
 
   els.stepCount.textContent = `Step ${currentStep + 1} of ${steps.length}`;
   els.stepTitle.textContent = step.title;
-  els.stepText.textContent = step.text;
+  els.stepText.innerHTML = step.text;
   els.workspace.classList.toggle("has-side-inspector", showsSparseInspector);
   els.inspector.hidden = !showsSparseInspector;
   els.stageNote.hidden = showsSparseInspector;
-  els.stageNoteTitle.textContent = step.inspectorTitle;
-  els.stageNoteText.textContent = step.inspectorText;
-  els.inspectorTitle.textContent = step.inspectorTitle;
-  els.inspectorText.textContent = step.inspectorText;
+  els.stageNoteTitle.innerHTML = step.inspectorTitle;
+  els.stageNoteText.innerHTML = step.inspectorText;
+  els.inspectorTitle.innerHTML = step.inspectorTitle;
+  els.inspectorText.innerHTML = step.inspectorText;
   els.visualPlane.innerHTML = step.render();
   bindRatingEditor();
+  bindFactorLineExplorer();
 
   els.tabs.forEach((tab) => {
     tab.classList.toggle("is-active", Number(tab.dataset.step) === currentStep);
