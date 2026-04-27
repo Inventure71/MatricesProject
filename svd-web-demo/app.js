@@ -1023,17 +1023,19 @@ function preferenceMapHTML() {
   const yScale = (value) => 100 - (mapPadding * 100 + ((value - yMin) / yRange) * (100 - mapPadding * 200));
   const youPoint = userPoints[targetUserIndex];
   const youDisplayPoint = { x: xScale(youPoint.x), y: yScale(youPoint.y) };
-  const nearestRecommendation = model.recommendations
-    .map((recommendation) => {
-      const movieIndex = movies.indexOf(recommendation.movie);
-      const moviePoint = moviePoints[movieIndex];
+  const nearestMapMovie = moviePoints
+    .map((moviePoint) => {
+      const movieIndex = moviePoint.columnIndex;
       const endX = xScale(moviePoint.x);
       const endY = yScale(moviePoint.y);
       return {
-        recommendation,
+        movie: movies[movieIndex],
         movieIndex,
         endX,
         endY,
+        category: movieCategories[movieIndex],
+        score: model.predictedRatings[targetUserIndex][movieIndex],
+        rated: ratings[targetUserIndex][movieIndex] !== null,
         distance: Math.hypot(youDisplayPoint.x - endX, youDisplayPoint.y - endY),
       };
     })
@@ -1054,20 +1056,21 @@ function preferenceMapHTML() {
     };
   };
   const nearestLink =
-    nearestRecommendation
+    nearestMapMovie
       ? {
           startX: youDisplayPoint.x,
           startY: youDisplayPoint.y,
-          endX: nearestRecommendation.endX,
-          endY: nearestRecommendation.endY,
-          movie: nearestRecommendation.recommendation.movie,
-          category: movieCategories[nearestRecommendation.movieIndex],
-          score: nearestRecommendation.recommendation.score,
-          distance: nearestRecommendation.distance,
+          endX: nearestMapMovie.endX,
+          endY: nearestMapMovie.endY,
+          movie: nearestMapMovie.movie,
+          category: nearestMapMovie.category,
+          score: nearestMapMovie.score,
+          rated: nearestMapMovie.rated,
+          distance: nearestMapMovie.distance,
         }
       : null;
   const recommendedLink = mapLinkForMovie(topRecommendationIndex, topRecommendation);
-  const nearestMovieIndex = nearestRecommendation?.movieIndex ?? -1;
+  const nearestMovieIndex = nearestMapMovie?.movieIndex ?? -1;
   const comparisonDiffers =
     nearestLink && recommendedLink && nearestLink.movie !== recommendedLink.movie;
   const importantMovieIndices = new Set([
@@ -1178,7 +1181,7 @@ function preferenceMapHTML() {
         <div class="map-comparison-summary">
           ${
             nearestLink
-              ? `<p><span>Nearest on this 2D map</span><strong>${nearestLink.movie}</strong><b class="rank-category ${categoryClassName(nearestLink.category)}">${nearestLink.category}</b><em>predicted ${format(nearestLink.score, 2)}</em></p>`
+              ? `<p><span>Nearest movie on this 2D map</span><strong>${nearestLink.movie}</strong><b class="rank-category ${categoryClassName(nearestLink.category)}">${nearestLink.category}</b><em>${nearestLink.rated ? "already rated" : "unrated"}, predicted ${format(nearestLink.score, 2)}</em></p>`
               : ""
           }
           ${
@@ -1186,7 +1189,7 @@ function preferenceMapHTML() {
               ? `<p><span>Top recommendation</span><strong>${recommendedLink.movie}</strong><b class="rank-category ${categoryClassName(recommendedLink.category)}">${recommendedLink.category}</b><em>predicted ${format(recommendedLink.score, 2)}</em></p>`
               : ""
           }
-          <small>${comparisonDiffers ? "They are different because map closeness is visual distance in Factor 1 and Factor 2, while recommendation ranking uses predicted rating." : "Here they match, but they are still two different checks: map distance versus predicted rating."}</small>
+          <small>${comparisonDiffers ? "They are different because map closeness is visual distance in Factor 1 and Factor 2, while recommendation ranking uses predicted rating and filters out already-rated movies." : "Here they match, but they are still two different checks: map distance versus predicted rating."}</small>
         </div>
         <p class="map-hint">Drag the map to move around. Scroll or use + to zoom into crowded points; every plotted point stays part of the map.</p>
         <div class="map-guide">
