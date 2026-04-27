@@ -6,3 +6,4 @@ tmp/
 Docs/
 .playwright-mcp/
 svd-web-demo/tests/
+output/
