@@ -1809,19 +1809,21 @@ h3 {
   text-align: center;
 }
 
-.closest-button {
+.map-toggle-button {
   width: auto !important;
   padding: 0 12px;
   color: var(--accent-strong) !important;
 }
 
-.closest-button.is-active {
+.map-toggle-button.is-active {
   border-color: var(--accent) !important;
   background: var(--accent) !important;
   color: white !important;
 }
 
-.closest-summary {
+.map-comparison-summary {
+  display: grid;
+  gap: 7px;
   max-width: 420px;
   padding: 8px 10px;
   border: 1px solid rgba(15, 118, 110, 0.18);
@@ -1829,6 +1831,42 @@ h3 {
   background: rgba(15, 118, 110, 0.07);
   color: var(--muted);
   font-size: 12px !important;
+}
+
+.map-comparison-summary p {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  align-items: center;
+  margin: 0;
+}
+
+.map-comparison-summary p > span {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 820;
+  text-transform: uppercase;
+}
+
+.map-comparison-summary strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.map-comparison-summary em {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.map-comparison-summary small {
+  padding-top: 6px;
+  border-top: 1px solid rgba(15, 118, 110, 0.14);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .map-hint {
@@ -1971,7 +2009,7 @@ h3 {
   user-select: none;
 }
 
-.closest-link-layer {
+.comparison-link-layer {
   position: absolute;
   inset: 0;
   z-index: 3;
@@ -1982,17 +2020,22 @@ h3 {
   transition: none;
 }
 
-.closest-link-layer.is-visible,
-.preference-map.is-showing-closest .closest-link-layer {
+.comparison-link-layer.is-visible,
+.preference-map.is-showing-comparison .comparison-link-layer {
   opacity: 1;
 }
 
-.closest-link-layer line {
+.comparison-link-layer line {
   stroke: var(--accent-strong);
   stroke-width: 3;
   stroke-linecap: round;
   stroke-dasharray: 8 7;
   filter: drop-shadow(0 2px 4px rgba(15, 118, 110, 0.24));
+}
+
+.comparison-link-layer .recommended-link {
+  stroke: var(--warm);
+  stroke-dasharray: none;
 }
 
 .preference-map.is-dragging {
@@ -2084,6 +2127,20 @@ h3 {
   height: 10px;
   background: #b85c38;
   box-shadow: none;
+}
+
+.map-point.is-nearest.movie {
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.22);
+}
+
+.map-point.is-recommended.movie {
+  box-shadow: 0 0 0 3px rgba(217, 164, 65, 0.3);
+}
+
+.map-point.is-nearest.is-recommended.movie {
+  box-shadow:
+    0 0 0 3px rgba(15, 118, 110, 0.2),
+    0 0 0 6px rgba(217, 164, 65, 0.24);
 }
 
 .map-point em {

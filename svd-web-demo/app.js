@@ -58,7 +58,7 @@ function userHeaderHTML(rowIndex, isTargetRow) {
 }
 const mapView = { scale: 1, x: 0, y: 0 };
 const factorLineView = { zoom: 1, dragging: false, startX: 0, startScrollLeft: 0 };
-let showClosestUnwatchedMovie = false;
+let showMapComparison = false;
 let showMovieLabels = true;
 
 function targetLastUserIndices() {
@@ -373,7 +373,7 @@ function applyMapView(mapElement) {
     element.style.top = `${point.y}px`;
   });
 
-  mapElement.querySelectorAll("[data-closest-link]").forEach((line) => {
+  mapElement.querySelectorAll("[data-map-link]").forEach((line) => {
     const start = scaledPoint(Number(line.dataset.startX), Number(line.dataset.startY));
     const end = scaledPoint(Number(line.dataset.endX), Number(line.dataset.endY));
     line.setAttribute("x1", String(start.x));
@@ -407,12 +407,12 @@ function bindPreferenceMap() {
     });
   });
 
-  els.visualPlane.querySelectorAll("[data-show-closest]").forEach((button) => {
+  els.visualPlane.querySelectorAll("[data-show-map-comparison]").forEach((button) => {
     button.addEventListener("click", () => {
-      showClosestUnwatchedMovie = !showClosestUnwatchedMovie;
-      button.setAttribute("aria-pressed", String(showClosestUnwatchedMovie));
-      button.classList.toggle("is-active", showClosestUnwatchedMovie);
-      mapElement.classList.toggle("is-showing-closest", showClosestUnwatchedMovie);
+      showMapComparison = !showMapComparison;
+      button.setAttribute("aria-pressed", String(showMapComparison));
+      button.classList.toggle("is-active", showMapComparison);
+      mapElement.classList.toggle("is-showing-comparison", showMapComparison);
       applyMapView(mapElement);
     });
   });
@@ -1023,7 +1023,7 @@ function preferenceMapHTML() {
   const yScale = (value) => 100 - (mapPadding * 100 + ((value - yMin) / yRange) * (100 - mapPadding * 200));
   const youPoint = userPoints[targetUserIndex];
   const youDisplayPoint = { x: xScale(youPoint.x), y: yScale(youPoint.y) };
-  const closestRecommendation = model.recommendations
+  const nearestRecommendation = model.recommendations
     .map((recommendation) => {
       const movieIndex = movies.indexOf(recommendation.movie);
       const moviePoint = moviePoints[movieIndex];
@@ -1038,18 +1038,38 @@ function preferenceMapHTML() {
       };
     })
     .sort((left, right) => left.distance - right.distance)[0];
-  const closestLink =
-    closestRecommendation
+  const topRecommendation = model.recommendations[0] ?? null;
+  const topRecommendationIndex = topRecommendation ? movies.indexOf(topRecommendation.movie) : -1;
+  const mapLinkForMovie = (movieIndex, recommendation) => {
+    if (!recommendation || movieIndex < 0) return null;
+    const moviePoint = moviePoints[movieIndex];
+    return {
+      startX: youDisplayPoint.x,
+      startY: youDisplayPoint.y,
+      endX: xScale(moviePoint.x),
+      endY: yScale(moviePoint.y),
+      movie: recommendation.movie,
+      category: movieCategories[movieIndex],
+      score: recommendation.score,
+    };
+  };
+  const nearestLink =
+    nearestRecommendation
       ? {
           startX: youDisplayPoint.x,
           startY: youDisplayPoint.y,
-          endX: closestRecommendation.endX,
-          endY: closestRecommendation.endY,
-          movie: closestRecommendation.recommendation.movie,
-          category: movieCategories[closestRecommendation.movieIndex],
-          score: closestRecommendation.recommendation.score,
+          endX: nearestRecommendation.endX,
+          endY: nearestRecommendation.endY,
+          movie: nearestRecommendation.recommendation.movie,
+          category: movieCategories[nearestRecommendation.movieIndex],
+          score: nearestRecommendation.recommendation.score,
+          distance: nearestRecommendation.distance,
         }
       : null;
+  const recommendedLink = mapLinkForMovie(topRecommendationIndex, topRecommendation);
+  const nearestMovieIndex = nearestRecommendation?.movieIndex ?? -1;
+  const comparisonDiffers =
+    nearestLink && recommendedLink && nearestLink.movie !== recommendedLink.movie;
   const importantMovieIndices = new Set([
     predictionExample.column,
     ...model.recommendations.slice(0, 3).map((item) => movies.indexOf(item.movie)),
@@ -1078,7 +1098,7 @@ function preferenceMapHTML() {
         point.type === "movie" ? showMovieLabels && shouldLabel : shouldLabel;
       return `
         <span
-          class="map-point ${point.type}${categoryClass}${point.target ? " is-target" : ""}"
+          class="map-point ${point.type}${categoryClass}${point.target ? " is-target" : ""}${point.columnIndex === nearestMovieIndex ? " is-nearest" : ""}${point.columnIndex === topRecommendationIndex ? " is-recommended" : ""}"
           style="--x:${baseX}%;--y:${baseY}%;"
           data-map-base-x="${baseX}"
           data-map-base-y="${baseY}"
@@ -1143,23 +1163,31 @@ function preferenceMapHTML() {
           <button type="button" data-map-zoom="in" aria-label="Zoom in">+</button>
           <button type="button" data-map-zoom="reset">Reset</button>
           <button
-            class="closest-button${showClosestUnwatchedMovie ? " is-active" : ""}"
+            class="map-toggle-button${showMapComparison ? " is-active" : ""}"
             type="button"
-            data-show-closest="true"
-            aria-pressed="${showClosestUnwatchedMovie}"
-          >show closest unwatched movie</button>
+            data-show-map-comparison="true"
+            aria-pressed="${showMapComparison}"
+          >compare map vs recommendation</button>
           <button
-            class="closest-button${showMovieLabels ? " is-active" : ""}"
+            class="map-toggle-button${showMovieLabels ? " is-active" : ""}"
             type="button"
             data-show-movie-labels="true"
             aria-pressed="${showMovieLabels}"
           >all movie names</button>
         </div>
-        ${
-          closestLink
-            ? `<p class="closest-summary">Closest unrated movie on this 2D map: <strong>${closestLink.movie}</strong> <span class="rank-category ${categoryClassName(closestLink.category)}">${closestLink.category}</span>, predicted ${format(closestLink.score, 2)}.</p>`
-            : ""
-        }
+        <div class="map-comparison-summary">
+          ${
+            nearestLink
+              ? `<p><span>Nearest on this 2D map</span><strong>${nearestLink.movie}</strong><b class="rank-category ${categoryClassName(nearestLink.category)}">${nearestLink.category}</b><em>predicted ${format(nearestLink.score, 2)}</em></p>`
+              : ""
+          }
+          ${
+            recommendedLink
+              ? `<p><span>Top recommendation</span><strong>${recommendedLink.movie}</strong><b class="rank-category ${categoryClassName(recommendedLink.category)}">${recommendedLink.category}</b><em>predicted ${format(recommendedLink.score, 2)}</em></p>`
+              : ""
+          }
+          <small>${comparisonDiffers ? "They are different because map closeness is visual distance in Factor 1 and Factor 2, while recommendation ranking uses predicted rating." : "Here they match, but they are still two different checks: map distance versus predicted rating."}</small>
+        </div>
         <p class="map-hint">Drag the map to move around. Scroll or use + to zoom into crowded points; every plotted point stays part of the map.</p>
         <div class="map-guide">
           <strong>All user coordinates</strong>
@@ -1174,17 +1202,34 @@ function preferenceMapHTML() {
           ${movieGuide}
         </div>
       </div>
-      <div class="preference-map${showClosestUnwatchedMovie ? " is-showing-closest" : ""}" aria-label="2D hidden preference map">
+      <div class="preference-map${showMapComparison ? " is-showing-comparison" : ""}" aria-label="2D hidden preference map">
         ${
-          closestLink
-            ? `<svg class="closest-link-layer${showClosestUnwatchedMovie ? " is-visible" : ""}" aria-hidden="true">
-                <line
-                  data-closest-link="true"
-                  data-start-x="${closestLink.startX}"
-                  data-start-y="${closestLink.startY}"
-                  data-end-x="${closestLink.endX}"
-                  data-end-y="${closestLink.endY}"
-                ></line>
+          nearestLink || recommendedLink
+            ? `<svg class="comparison-link-layer${showMapComparison ? " is-visible" : ""}" aria-hidden="true">
+                ${
+                  nearestLink
+                    ? `<line
+                        class="nearest-link"
+                        data-map-link="true"
+                        data-start-x="${nearestLink.startX}"
+                        data-start-y="${nearestLink.startY}"
+                        data-end-x="${nearestLink.endX}"
+                        data-end-y="${nearestLink.endY}"
+                      ></line>`
+                    : ""
+                }
+                ${
+                  recommendedLink
+                    ? `<line
+                        class="recommended-link"
+                        data-map-link="true"
+                        data-start-x="${recommendedLink.startX}"
+                        data-start-y="${recommendedLink.startY}"
+                        data-end-x="${recommendedLink.endX}"
+                        data-end-y="${recommendedLink.endY}"
+                      ></line>`
+                    : ""
+                }
               </svg>`
             : ""
         }
@@ -1468,9 +1513,9 @@ const steps = [
   {
     tab: "2D Map",
     title: "See the hidden preference map",
-    text: "When k = 2, the first hidden factor becomes the x-axis and the second hidden factor becomes the y-axis. This lets us draw users and movies as points in the same learned preference space.",
-    inspectorTitle: "Why only k = 2",
-    inspectorText: "A normal x-y graph can only show two dimensions. Larger k values still work for prediction, but they need more dimensions than a simple flat map can show.",
+    text: "When k = 2, Factor 1 becomes the x-axis and Factor 2 becomes the y-axis. The nearest movie on this map shows visual similarity in two factors; the top recommendation is ranked by predicted rating.",
+    inspectorTitle: "Map distance is not ranking",
+    inspectorText: "Close on the graph means close in Factor 1 and Factor 2. Recommendation ranking uses the prediction formula, so the nearest map point and the top recommendation can differ.",
     render: preferenceMapHTML,
   },
   {
